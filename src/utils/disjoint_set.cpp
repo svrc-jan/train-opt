@@ -3,7 +3,8 @@
 #include <cassert>
 #include <map>
 
-Disjoint_set::Disjoint_set(int n_items) : n_items(n_items), n_sets(n_items)
+Disjoint_set::Disjoint_set(int n_items) 
+	: n_items(n_items), n_sets(n_items)
 {
 	this->parent.resize(n_items);
 	this->size.resize(n_items);
@@ -15,7 +16,7 @@ Disjoint_set::Disjoint_set(int n_items) : n_items(n_items), n_sets(n_items)
 }
 
 
-int Disjoint_set::find_set(int v)
+int Disjoint_set::find_set(int v) const
 {
 	while (v != this->parent[v]) {
 		this->parent[v] = this->parent[this->parent[v]];
@@ -43,7 +44,7 @@ void Disjoint_set::union_set(int a, int b)
 }
 
 
-std::vector<int> Disjoint_set::get_result()
+std::vector<int> Disjoint_set::get_result() const
 {
 	std::vector<int> set_idx(this->n_items);
 
