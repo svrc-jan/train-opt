@@ -1,8 +1,9 @@
-/.vscode
-/**/CMakeCache.txt
-/**/CMakeFiles
-/**/Makefile
 /build
-/**/cmake_install.cmake
-/gmon.out
-/analysis.txt
+
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+.vscode/
+!.vscode/c_cpp_properties.json

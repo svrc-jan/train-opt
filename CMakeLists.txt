@@ -32,7 +32,7 @@ add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
 
 
-add_compile_options(-Wall -Wextra -g -DNO_VLA)
+add_compile_options(-Wall -Wextra -g)
 
 # optimize stable parts
 target_compile_options(instance PRIVATE -O3)
