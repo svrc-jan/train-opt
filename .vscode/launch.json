@@ -1,0 +1,43 @@
+{
+	"configurations": [
+		{
+			"name": "Debug",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${input:debugTarget}",
+			"args": [
+				"${input:instance}"
+			],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"launchCompleteCommand": "exec-run",
+			"MIMode": "gdb",
+			"miDebuggerPath": "/usr/bin/gdb",
+		}
+	],
+	"inputs": [
+		{
+			"id": "debugTarget",
+			"type": "command",
+			"command": "extension.commandvariable.file.pickFile",
+			"args" : {
+				"description" : "Select debug target",
+				"include" : "build/exe/*",
+				"display" : "fileName"
+			}
+		},
+		{
+			"id": "instance",
+			"type": "command",
+			"command": "extension.commandvariable.file.pickFile",
+			"args" : {
+				"description" : "Select instance file",
+				"include" : "data/*.json",
+				"display" : "fileName",
+				"addEmpty" : true
+			}
+		}
+	],
+	
+	"version": "0.2.0",
+}

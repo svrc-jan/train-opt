@@ -5,5 +5,7 @@ CMakeFiles/
 Makefile
 cmake_install.cmake
 
-.vscode/
+.vscode/*
 !.vscode/c_cpp_properties.json
+!.vscode/tasks.json
+!.vscode/launch.json
