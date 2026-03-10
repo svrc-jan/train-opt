@@ -3,7 +3,7 @@
 		{
 			"label": "Build all debug",
 			"type": "shell",
-			"command": "cmake --build . --config Debug --target all -j 8"
+			"command": "cmake . && cmake --build ./build --config Debug --target all -j 8"
 			,
 			"group": {
 				"kind": "build",

@@ -26,17 +26,11 @@ std::string get_parent_dir(const std::string& s)
 json get_json_file(const std::string& file_name)
 {
 	std::string file_name_parent = get_parent_dir(file_name);
-
 	std::ifstream file;
 
 	if (file_exists(file_name)) {
 		// std::cerr << "json file '" << file_name << "' found" << std::endl;
 		file.open(file_name);
-	}
-	
-	else if (file_exists(file_name_parent)) {
-		// std::cerr << "json file '" << file_name_parent << "' found" << std::endl;
-		file.open(file_name_parent);
 	}
 		
 	else {

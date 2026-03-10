@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
 	string file_name = "data/wab_large_1.json";
 	
 
-	if (argc > 1 && strlen(argv[1])) {
+	if (argc > 1 && strlen(argv[1]) > 0) {
 		file_name = string(argv[1]);
 	}
 

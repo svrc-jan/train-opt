@@ -4,7 +4,7 @@
 			"name": "Debug",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${input:debugTarget}",
+			"program": "${input:target}",
 			"args": [
 				"${input:instance}"
 			],
@@ -17,11 +17,11 @@
 	],
 	"inputs": [
 		{
-			"id": "debugTarget",
+			"id": "target",
 			"type": "command",
 			"command": "extension.commandvariable.file.pickFile",
 			"args" : {
-				"description" : "Select debug target",
+				"description" : "Select target",
 				"include" : "build/exe/*",
 				"display" : "fileName"
 			}
@@ -31,7 +31,7 @@
 			"type": "command",
 			"command": "extension.commandvariable.file.pickFile",
 			"args" : {
-				"description" : "Select instance file",
+				"description" : "Select instance",
 				"include" : "data/*.json",
 				"display" : "fileName",
 				"addEmpty" : true
