@@ -5,9 +5,12 @@ project(train_opt)
 set(CMAKE_CXX_COMPILER g++-14)
 set(CMAKE_CXX_STANDARD 23)
 
+add_compile_options(-Wall -Wextra -g)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/exe)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
+set(CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/bpd)
 
 
 include_directories(
@@ -32,8 +35,6 @@ target_link_libraries(instance_test instance)
 add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
 
-
-add_compile_options(-Wall -Wextra -g)
 
 # optimize stable parts
 target_compile_options(instance PRIVATE -O3)

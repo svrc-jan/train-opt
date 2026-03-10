@@ -4,15 +4,20 @@
 			"name": "Debug",
 			"type": "cppdbg",
 			"request": "launch",
+			
 			"program": "${input:target}",
 			"args": [
 				"${input:instance}"
 			],
-			"stopAtEntry": false,
+
 			"cwd": "${workspaceFolder}",
+			"stopAtEntry": false,
 			"launchCompleteCommand": "exec-run",
+			
 			"MIMode": "gdb",
 			"miDebuggerPath": "/usr/bin/gdb",
+
+			"environment": []
 		}
 	],
 	"inputs": [
