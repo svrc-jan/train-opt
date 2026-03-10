@@ -18,7 +18,7 @@ int main(int argc, char const *argv[])
 	}
 
 	GRBEnv grb_env = GRBEnv();
-	grb_env.set(GRB_IntParam_OutputFlag, 0);
+	// grb_env.set(GRB_IntParam_OutputFlag, 0);
 
 	cout << file_name << endl;
 	Instance inst(file_name);

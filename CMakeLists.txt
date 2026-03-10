@@ -42,4 +42,4 @@ target_link_libraries(path_select_test path_select)
 # optimize stable parts
 target_compile_options(instance PRIVATE -O3)
 target_compile_options(preprocess PRIVATE -O3)
-# target_compile_options(path_select PRIVATE -O3)
+target_compile_options(path_select PRIVATE -O3)

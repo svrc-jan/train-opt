@@ -16,7 +16,7 @@ public:
 	~Path_select();
 
 	void select_paths(std::vector<std::vector<int>>& paths,
-		std::vector<int>& level_time);
+		std::vector<int>& junct_time);
 
 	void select_paths(std::vector<std::vector<int>>& paths);
 
@@ -31,17 +31,11 @@ private:
 	std::vector<GRBVar> res_var;
 	std::vector<GRBConstr> res_cons;
 
-	void init_model();
-	void clear_model();
-
-	void make_op_var();
-	void make_flow_cons();
-
 	void get_res_overlaps(std::vector<Res_overlap>& overlaps,
-		const std::vector<int>& level_time);
+		const std::vector<int>& junct_time);
 
 	void add_overlaps_to_model(const std::vector<Res_overlap>& overlaps);
-	void propagate_level_time(std::vector<int>& level_time);
+	void propagate_junct_time(std::vector<int>& junct_time);
 
 	void extract_paths_from_sol(std::vector<std::vector<int>>& paths);
 };
@@ -71,12 +65,13 @@ struct Path_select::Res_overlap
 
 struct Path_select::Res_interval
 {
+	int train;
 	int op;
 	int start;
 	int end;
 
-	Res_interval(int op_, int start_, int end_)
-		: op(op_), start(start_), end(end_) {}
+	Res_interval(int train_, int op_, int start_, int end_)
+		: train(train_), op(op_), start(start_), end(end_) {}
 
 	bool operator<(const Res_interval& other)
 	{

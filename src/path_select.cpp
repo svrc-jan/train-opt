@@ -24,107 +24,49 @@ Path_select::~Path_select()
 }
 
 
-void Path_select::select_paths(vector<vector<int>>& paths, vector<int>& level_time)
+void Path_select::select_paths(vector<vector<int>>& paths, vector<int>& junct_time)
 {
-	if (this->model == nullptr) {
-		this->init_model();
-	}
-	else {
-		this->clear_model();
-	}
-
-	this->propagate_level_time(level_time);
+	this->propagate_junct_time(junct_time);
 	
 	vector<Res_overlap> overlaps;
-	this->get_res_overlaps(overlaps, level_time);
-	this->add_overlaps_to_model(overlaps);
+	this->get_res_overlaps(overlaps, junct_time);
 
-	this->model->optimize();
+	int n_ops = this->inst.n_ops();
+	int n_trains = this->inst.n_trains();
+	
+	vector<bool> train_selected(n_trains, false);
+	vector<int> op_overlap(n_ops);
 
-	this->extract_paths_from_sol(paths);
+	while (true) {
+		
+	}
 }
 
 
 void Path_select::select_paths(vector<vector<int>>& paths)
 {
-	vector<int> level_time(this->prepr.n_levels(), -1);
-	this->select_paths(paths, level_time);
-}
-
-
-void Path_select::init_model()
-{
-	this->model = new GRBModel(this->grb_env);
-	this->make_op_var();
-	this->make_flow_cons();
-}
-
-
-void Path_select::make_op_var()
-{
-	this->op_var = this->model->addVars(this->inst.n_ops(), GRB_BINARY);
-}
-
-
-void Path_select::make_flow_cons()
-{
-	for (auto& level : this->prepr.levels) {
-		GRBLinExpr var_sum = 0;
-		
-		if (level.ops_in.size == 0) {
-			var_sum += 1;
-		}
-		else {
-			for (int o : level.ops_in) {
-				var_sum += this->op_var[o];
-			}
-		}
-
-		if (level.ops_out.size == 0) {
-			var_sum -= 1;
-		}
-		else {
-			for (int o : level.ops_out) {
-				var_sum -= this->op_var[o];
-			}
-		}
-
-		this->model->addConstr(var_sum == 0);
-	}
-}
-
-
-void Path_select::clear_model()
-{
-	for (auto& c : this->res_cons) {
-		this->model->remove(c);
-	}
-	this->res_cons.clear();
-
-	for (auto& v : this->res_var) {
-		this->model->remove(v);
-	}
-	this->res_var.clear();
+	vector<int> junct_time(this->prepr.n_juncts(), -1);
+	this->select_paths(paths, junct_time);
 }
 
 
 void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps, 
-	const vector<int>& level_time)
+	const vector<int>& junct_time)
 {
 	vector<vector<Res_interval>> res_ints;
 	res_ints.resize(this->inst.n_res(), {});
 
 	for (int o = 0; o < this->inst.n_ops(); o++) {
-		auto& op_level = this->prepr.op_level[o];
-		auto& op = this->inst.ops[o];
-
-		int start = level_time[op_level.first];
-		int end = level_time[op_level.second];
+		auto& i_op = this->inst.ops[o];
+		auto& p_op = this->prepr.ops[o];
+		
+		int op_start = junct_time[p_op.junct_start];
+		int op_end = junct_time[p_op.junct_end];
 
 		for (auto& res : this->inst.ops[o].res) {
-			res_ints[res.idx].push_back(
-				// extend interval on both sides by op dur
-				Res_interval(o, start - op.dur, end + res.time + op.dur));
+			int start = op_start - i_op.dur;
+			int end = op_end + res.time + i_op.dur;
+			res_ints[res.idx].push_back(Res_interval(i_op.train, o, start, end));
 		}
 	}
 
@@ -139,10 +81,11 @@ void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps,
 				
 				int size = a.end - b.start;
 
-				if (size > 0) {
+				if (size > 0 && a.train != b.train) {
 					overlaps.push_back(Res_overlap(a.op, b.op, size));
 				}
-				else {
+
+				if (size <= 0) {
 					break;
 				}
 			}
@@ -151,6 +94,7 @@ void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps,
 
 	sort(overlaps.begin(), overlaps.end());
 
+	int new_size = overlaps.size();
 	int i_max = (int)overlaps.size() - 1;
 	for (int i = 0; i <= i_max; i++) {
 		auto& a = overlaps[i];
@@ -159,8 +103,19 @@ void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps,
 		if (i < i_max && a.op1 == b.op1 && a.op2 == b.op2) {
 			b.size += a.size;
 			a.size = 0;
+
+			new_size -= 1;
 		}
-	} 
+	}
+
+	vector<Res_overlap> new_overlaps;
+	new_overlaps.reserve(new_size);
+
+	for (auto& ol : overlaps) {
+		if (ol.size > 0) {
+			new_overlaps.push_back(ol);
+		}
+	}
 }
 
 
@@ -182,25 +137,25 @@ void Path_select::add_overlaps_to_model(const vector<Res_overlap>& overlaps)
 }
 
 
-void Path_select::propagate_level_time(vector<int>& level_time)
+void Path_select::propagate_junct_time(vector<int>& junct_time)
 {
-	for (int l = 0; l < this->prepr.n_levels(); l++) {
-		auto& level = this->prepr.levels[l];
+	for (int l = 0; l < this->prepr.n_juncts(); l++) {
+		auto& junct = this->prepr.juncts[l];
 
-		if (level_time[l] < 0) {
-			level_time[l] = level.time_lb;
+		if (junct_time[l] < 0) {
+			junct_time[l] = junct.time_lb;
 			
 			int path_time = INT_MAX;
 			
-			for (int o : level.ops_in) {
+			for (int o : junct.ops_in) {
 				int dur = this->inst.ops[o].dur;
-				int l_pred = this->prepr.op_level_start(o);
+				int j_pred = this->prepr.ops[o].junct_start;
 
-				path_time = min(path_time, level_time[l_pred] + dur);
+				path_time = min(path_time, junct_time[j_pred] + dur);
 			}
 
 			if (path_time < INT_MAX) {
-				level_time[l] = max(level_time[l], path_time);
+				junct_time[l] = max(junct_time[l], path_time);
 			}
 		}
 	}
