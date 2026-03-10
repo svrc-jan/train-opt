@@ -1,5 +1,6 @@
 #include "path_select.hpp"
 
+#include "utils/stl_print.hpp"
 
 using namespace std;
 
@@ -43,6 +44,7 @@ void Path_select::select_paths(vector<vector<int>>& paths, vector<int>& level_ti
 	this->extract_paths_from_sol(paths);
 }
 
+
 void Path_select::select_paths(vector<vector<int>>& paths)
 {
 	vector<int> level_time(this->prepr.n_levels(), -1);
@@ -56,7 +58,6 @@ void Path_select::init_model()
 	this->make_op_var();
 	this->make_flow_cons();
 }
-
 
 
 void Path_select::make_op_var()
@@ -115,12 +116,15 @@ void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps,
 
 	for (int o = 0; o < this->inst.n_ops(); o++) {
 		auto& op_level = this->prepr.op_level[o];
+		auto& op = this->inst.ops[o];
 
 		int start = level_time[op_level.first];
 		int end = level_time[op_level.second];
 
 		for (auto& res : this->inst.ops[o].res) {
-			res_ints[res.idx].push_back(Res_interval(o, start, end + res.time));
+			res_ints[res.idx].push_back(
+				// extend interval on both sides by op dur
+				Res_interval(o, start - op.dur, end + res.time + op.dur));
 		}
 	}
 
@@ -133,7 +137,7 @@ void Path_select::get_res_overlaps(vector<Res_overlap>& overlaps,
 			for (int j = i+1; j < (int)ri.size(); j++) {
 				auto& b = ri[j];
 				
-				int size = a.start - b.end;
+				int size = a.end - b.start;
 
 				if (size > 0) {
 					overlaps.push_back(Res_overlap(a.op, b.op, size));
@@ -216,8 +220,9 @@ void Path_select::extract_paths_from_sol(std::vector<std::vector<int>>& paths)
 		path.clear();
 		path.push_back(train.op_start);
 
-		while (path.back() != train.op_end()) {
-			auto& op = this->inst.ops[path.back()];
+		while (path.back() != train.op_last()) {
+			int o = path.back();
+			auto& op = this->inst.ops[o];
 
 			int o_select = -1;
 			for (int o_succ : op.succ) {
@@ -227,8 +232,17 @@ void Path_select::extract_paths_from_sol(std::vector<std::vector<int>>& paths)
 				}
 			}
 
+			assert(o_select > 0);
 			path.push_back(o_select);
 		}
 	}
 }
 
+
+
+void Path_select::Res_interval::print(std::ostream& os) const
+{
+	os << "Res_interval(op=" << this->op <<
+		", start=" << this->start <<
+		", end=" << this->end << ")";
+}

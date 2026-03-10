@@ -56,8 +56,8 @@ struct Path_select::Res_overlap
 	Res_overlap(int op1_, int op2_, int size_) 
 		: size(size_)
 	{
-		this->op1 = (op1_ < op2_) ? op1_ : op2;
-		this->op2 = (op1_ < op2_) ? op2_ : op1;
+		this->op1 = (op1_ < op2_) ? op1_ : op2_;
+		this->op2 = (op1_ < op2_) ? op2_ : op1_;
 		this->size = size_;
 	}
 
@@ -82,5 +82,12 @@ struct Path_select::Res_interval
 	{
 		return (this->start < other.start) || 
 			((this->start == other.start) && (this->end < other.end));
+	}
+
+	void print(std::ostream& os) const;
+	friend std::ostream& operator<<(std::ostream& os, const Res_interval& ri)
+	{
+		ri.print(os);
+		return os;
 	}
 };

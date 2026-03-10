@@ -5,3 +5,7 @@ target_link_libraries(instance files)
 
 add_library(preprocess preprocess.cpp)
 target_link_libraries(preprocess instance disjoint_set)
+
+add_library(path_select path_select.cpp)
+target_include_directories(path_select PUBLIC ${GUROBI_INC})
+target_link_libraries(path_select preprocess ${GUROBI_API_LIB} ${GUROBI_BASE_LIB})

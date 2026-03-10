@@ -3,13 +3,14 @@
 		{
 			"name": "Linux",
 			"includePath": [
-				"${default}"
+				"${default}",
+				"/opt/gurobi1201/linux64/include/"
 			],
 			"defines": [],
 			"compilerPath": "/usr/bin/gcc-14",
 			"cStandard": "c17",
 			"cppStandard": "c++23",
-			"intelliSenseMode": "linux-gcc-x64"
+			"intelliSenseMode": "linux-clang-x64"
 		}
 	],
 	"version": 4

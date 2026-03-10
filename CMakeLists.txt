@@ -35,7 +35,11 @@ target_link_libraries(instance_test instance)
 add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
 
+add_executable(path_select_test apps/path_select_test.cpp)
+target_link_libraries(path_select_test path_select)
+
 
 # optimize stable parts
 target_compile_options(instance PRIVATE -O3)
 target_compile_options(preprocess PRIVATE -O3)
+# target_compile_options(path_select PRIVATE -O3)
