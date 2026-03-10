@@ -12,21 +12,20 @@ class Schedule
 public:
 	using Res_edges = std::pair<Graph::Edge, Graph::Edge>;
 
+	const Instance& inst;
+	const Preprocess& prepr;
+	Graph& graph;
+
 	Schedule(Graph& graph);
 
 	void set_all_paths(const std::vector<std::vector<int>>& paths);
 	void set_path(const int train_idx, const std::vector<int>& path);
 	bool process_from_start(Res_edges& res_edges);
 
-
 private:
 	struct Idx;
 	struct Event;
 	struct Res_use;
-
-	const Instance& inst;
-	const Preprocess& prepr;
-	Graph& graph;
 
 	int n_trains = 0;
 	int n_res = 0;
@@ -43,7 +42,8 @@ private:
 	inline TIME_T get_time_end(const Idx& idx);
 	inline TIME_T get_time_unlock(const Res_use& res_use);
 
-	int get_level_unlock(const int res_idx, const Idx& idx);
+	int get_level_lock(const int res_idx, Idx idx);
+	int get_level_unlock(const int res_idx, Idx idx, int& res_time);
 
 	// aux
 	std::priority_queue<Event> prio_queue;
@@ -68,7 +68,7 @@ struct Schedule::Event
 	TIME_T time = 0;
 
 	bool operator<(const Event& other) const
-	{ return this->time > other.time;}
+	{ return this->time > other.time; }
 };
 
 

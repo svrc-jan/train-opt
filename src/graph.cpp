@@ -86,12 +86,12 @@ void Graph::set_path_op(const int op)
 	auto& vtx_time_bounds = this->time_bounds[v_start];
 
 	vtx_forward.path = v_end;
-	vtx_backward.path = {.vertex = v_start, .time = inst_op.dur};
+	vtx_backward.path = {.vertex = v_start, .time = (TIME_T)inst_op.dur};
 	vtx_time_bounds = {.lower = inst_op.start_lb, .upper = inst_op.start_ub};
 }
 
 
-bool Graph::add_edge(const Edge& edge, const bool check_ub)
+bool Graph::add_edge(const Edge& edge)
 {
 	this->visited.clear();
 	if (!this->find_visited_rec(edge.vertex_to, edge.vertex_from)) {
@@ -414,4 +414,30 @@ void Graph::update_time_rec(const int v)
 
 	this->time[v] = new_time;
 	this->dirty.set_false(v);
+}
+
+void Graph::update_time_visited_rec(const int v)
+{
+	if (this->visited.get(v)) {
+		return;
+	}
+
+	const auto& vtx_backward = this->backward[v];
+
+	TIME_T new_time;
+	new_time = this->time_bounds[v].lower;
+
+	auto &path = vtx_backward.path;
+	if (path.vertex >= 0) {
+		this->update_time_rec(path.vertex);
+		new_time = max(new_time, this->time[path.vertex] + path.time);
+	}
+
+	for (auto& cons : vtx_backward.constrains) {
+		this->update_time_rec(cons.vertex);
+		new_time = max(new_time, this->time[cons.vertex] + cons.time);
+	}
+
+	this->time[v] = new_time;
+	this->visited.set_true(v);
 }

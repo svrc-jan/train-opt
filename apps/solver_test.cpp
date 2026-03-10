@@ -40,7 +40,8 @@ int main(int argc, char const *argv[])
 	Path_selector path_sel(inst);
 	Preprocess prepr(inst);
 	Graph graph(prepr);
-	Solver solver(graph);
+	Schedule sched(graph);
+	Solver solver(sched);
 
 	vector<vector<int>> paths;
 	path_sel.select_all_paths_by_res_imp(paths);
@@ -50,6 +51,7 @@ int main(int argc, char const *argv[])
 	vector<double> train_order(inst.n_trains());
 	for (int t = 0; t < inst.n_trains(); t++) {
 		graph.set_path(paths[t]);
+		sched.set_path(t, paths[t]);
 		train_order[t] = ((double)t)/(inst.n_trains() - 1);
 	}
 

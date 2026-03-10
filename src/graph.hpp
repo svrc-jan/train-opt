@@ -24,11 +24,12 @@ public:
 	void set_all_paths(const std::vector<std::vector<int>>& paths);
 	void set_path(const std::vector<int>& path);
 
-	bool add_edge(const Edge& edge, const bool check_ub=true);
+	bool add_edge(const Edge& edge);
 	bool remove_edge(const Edge& edge);
 	inline void restore_time_changes(const std::vector<Time_change> &changes);
 
 	inline TIME_T get_time(const int v);
+	inline TIME_T get_time_visited(const int v);
 
 private:
 	struct Constraint;
@@ -60,6 +61,7 @@ private:
 	bool find_visited_rec(const int v, const int v_cycle);
 	void mark_dirty_rec(const int v);
 	void update_time_rec(const int v);
+	void update_time_visited_rec(const int v);
 };
 
 
@@ -108,6 +110,15 @@ struct Graph::Vertex_time_bounds
 TIME_T Graph::get_time(const int v)
 {
 	this->update_time_rec(v);
+	return this->time[v];
+}
+
+
+TIME_T Graph::get_time_visited(const int v)
+{
+	this->visited.clear();
+	this->update_time_visited_rec(v);
+	
 	return this->time[v];
 }
 

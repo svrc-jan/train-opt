@@ -16,7 +16,7 @@ add_library(schedule schedule.cpp)
 target_link_libraries(schedule graph)
 
 add_library(solver solver.cpp)
-target_link_libraries(solver graph)
+target_link_libraries(solver schedule)
 
 add_library(lin_prog lin_prog.cpp)
 target_link_libraries(lin_prog preprocess)

@@ -22,7 +22,7 @@ find_library(COIN_UTILS_LIB CoinUtils)
 message(STATUS "coin - libs: " ${CLP_LIB} ", " ${CLP_SOLVER_LIB} ", " ${COIN_UTILS_LIB})
 
 set(GUROBI_API_LIB $ENV{GUROBI_HOME}/lib/libgurobi_c++.a)
-set(GUROBI_BASE_LIB $ENV{GUROBI_HOME}/lib/libgurobi130.so)
+set(GUROBI_BASE_LIB $ENV{GUROBI_HOME}/lib/libgurobi120.so)
 set(GUROBI_INC $ENV{GUROBI_HOME}/include)
 
 message(STATUS "gurobi - api lib: " ${GUROBI_API_LIB} 
