@@ -120,6 +120,8 @@ void Path_select::select_train_path(vector<vector<int>>& paths,
 	auto& path = paths[t];
 	auto& train = this->inst.trains[t];
 	
+	int op_offset = train.op_start;
+
 	vector<int> op_pred(train.ops.size, -1);
 	vector<int> op_dist(train.ops.size, INT_MAX);
 	op_dist[train.op_start] = 0;
@@ -127,6 +129,29 @@ void Path_select::select_train_path(vector<vector<int>>& paths,
 	priority_queue<Prio_op> prio_queue;
 	prio_queue.push({train.op_start, 0});
 
-	
-	
+	while (!prio_queue.empty()) {
+		auto curr = prio_queue.top();
+		prio_queue.pop();
+
+		int i = curr.op;
+		int dist = curr.prio;
+
+		if (dist > op_dist[i]) {
+			continue;
+		}
+
+		auto& op = this->inst.ops[i + op_offset];
+		int succ_dist = dist + op_cost[i];
+
+		for (int s : op.succ) {
+			int j = s - op_offset;
+
+			if (succ_dist < op_dist[j]) {
+				op_dist[j] = succ_dist;
+				op_pred[j] = i;
+
+				prio_queue.push({j, succ_dist});
+			}
+		}
+	}
 }

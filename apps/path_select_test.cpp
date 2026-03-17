@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
 	cout << file_name << endl;
 	Instance inst(file_name);
 	Preprocess prepr(inst);
-	Path_select path_sel(prepr, grb_env);
+	Path_select path_sel(prepr);
 
 	vector<vector<int>> paths;
 	path_sel.select_paths(paths);

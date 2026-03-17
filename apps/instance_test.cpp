@@ -19,6 +19,7 @@ int main(int argc, char const *argv[])
 
 	cout << file_name << endl;
 	Instance inst(file_name);
+	cout << "n ops: " << inst.n_ops() << ", n res: " << inst.n_res() << endl;
 
 	return 0;
 }
