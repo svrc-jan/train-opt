@@ -33,8 +33,6 @@ public:
 	inline int n_op_pred() const { return this->op_pred.size(); }
 	inline int n_op_res() const { return this->op_res.size(); }
 
-	bool has_res_overlap(const int a, const int b, 
-		std::pair<int, int>& res_times) const;
 
 private:
 	std::vector<int> op_succ = {};
@@ -47,7 +45,10 @@ private:
 	void parse(json inst_jsn);
 	void assign_arrays();
 	void assign_pred_ops();
-	void propagate_bounds();
+	
+	void propagate_lower_bounds();
+	void propagate_upper_bounds();
+	void set_max_bound();
 
 	void add_res_name(std::string res_name);
 };

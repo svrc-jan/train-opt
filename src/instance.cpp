@@ -15,7 +15,9 @@ Instance::Instance(const string& file_name)
 	this->parse(inst_jsn);
 	this->assign_arrays();
 	this->assign_pred_ops();
-	this->propagate_bounds();
+	this->propagate_lower_bounds();
+	this->set_max_bound();
+	this->propagate_upper_bounds();
 }
 
 
@@ -195,7 +197,6 @@ void Instance::assign_pred_ops()
 	}
 	assert(idx == this->n_op_pred());
 
-
 	vector<int> pred_filled(this->n_ops(), 0);
 	for (int o = 0; o < this->n_ops(); o++) {
 		for (int s : this->ops[o].succ) {
@@ -206,121 +207,142 @@ void Instance::assign_pred_ops()
 	for (int o = 0; o < this->n_ops(); o++) {
 		assert(this->ops[o].pred.size == pred_filled[o]);
 	}
-
 }
 
 
-void Instance::propagate_bounds()
+void Instance::propagate_lower_bounds()
 {
-#ifndef USE_OMP
-	queue<int> que;
-#endif
+	queue<int> q;
 
-#ifdef USE_OMP
-	#pragma omp parallel for schedule(static, 8)
-#endif
-	for (auto& train : this->trains) {
-#ifdef USE_OMP
-		queue<int> que;
-#endif
+	vector<int> n_in(this->n_ops());
+	for (int o = 0; o < this->n_ops(); o++) {
+		n_in[o] = this->ops[o].pred.size;
+	}
 
-#ifndef NO_VLA
-		int n_in[train.ops.size];
-#else
-		vector<int> n_in(train.ops.size);
-#endif
-		for (int i = 0; i < train.ops.size; i++) {
-			n_in[i] = train.ops[i].pred.size;
-		}
+	for (int t = 0; t < this->n_trains(); t++) {
+		auto& train = this->trains[t];
+		q.push(train.op_start);
 
-		que.push(train.op_start);
+		while (!q.empty()) {
+			int o = q.front();
+			q.pop();
 
-		while(!que.empty()) {
-			int o = que.front();
-			que.pop();
 			auto& op = this->ops[o];
 
 			for (int s : op.succ) {
-				n_in[s - train.op_start] -= 1;
-				if (n_in[s - train.op_start] == 0) {
-					que.push(s);
+				n_in[s] -= 1;
+				if (n_in[s] == 0) {
+					q.push(s);
 				}
 			}
-
-			if (op.pred.size == 0) {
-				continue;
-			}
-
-			int pred_bound = INT_MAX;
-			for (int p : op.pred) {
-				auto& pred = this->ops[p];
-				pred_bound = min(pred_bound, pred.start_lb + pred.dur);
-			}
-			op.start_lb = max(op.start_lb, pred_bound);
-		}
-
-		for (int i = 0; i < train.ops.size; i++) {
-			n_in[i] = train.ops[i].succ.size;
-		}
-
-		que.push(train.op_last());
-
-		while(!que.empty()) {
-			int o = que.front();
-			que.pop();
-			auto& op = this->ops[o];
-
-			for (int p : op.pred) {
-				n_in[p - train.op_start] -= 1;
-				if (n_in[p - train.op_start] == 0) {
-					que.push(p);
+			
+			if (op.pred.size > 0) {
+				int path_bound = INT_MAX;
+				for (int p : op.pred) {
+					auto& pred = this->ops[p];
+					path_bound = min(path_bound, pred.start_lb + pred.dur);
 				}
-			}
 
-			if (op.succ.size == 0) {
-				continue;
+				op.start_lb = max(op.start_lb, path_bound);
 			}
-
-			int succ_bound = 0;
-			for (int s : op.succ) {
-				auto& succ = this->ops[s];
-				succ_bound = max(succ_bound, 
-					(succ.start_ub == INT_MAX) ? INT_MAX : succ.start_ub - op.dur);
-			}
-			op.start_lb = min(op.start_lb, succ_bound);
 		}
 	}
 }
 
 
-bool Instance::has_res_overlap(const int a, const int b, 
-		std::pair<int, int>& res_times) const
+void Instance::propagate_upper_bounds()
 {
-	const auto& res_a = this->ops[a].res;
-	const auto& res_b = this->ops[b].res;
+	queue<int> q;
 
-	res_times = {-1, -1};
-
-	int i = 0;
-	int j = 0;
-	while (i < res_a.size && j < res_b.size) {
-		if (res_a[i].idx < res_b[j].idx) {
-			i++;
-		}
-		else if (res_a[i].idx > res_b[j].idx) {
-			j++;
-		}
-		else {
-			res_times.first = max(res_a[i].time, res_times.first);
-			res_times.second = max(res_b[i].time, res_times.second);
-
-			return true;
-		}
+	vector<int> n_out(this->n_ops());
+	for (int o = 0; o < this->n_ops(); o++) {
+		n_out[o] = this->ops[o].succ.size;
 	}
 
-	bool ret = res_times.first >= 0 || res_times.second >= 0;
-	return ret;
+	for (int t = 0; t < this->n_trains(); t++) {
+		auto& train = this->trains[t];
+		q.push(train.op_last());
+
+		while (!q.empty()) {
+			int o = q.front();
+			q.pop();
+
+			auto& op = this->ops[o];
+
+			for (int p : op.pred) {
+				n_out[p] -= 1;
+				if (n_out[p] == 0) {
+					q.push(p);
+				}
+			}
+			
+			if (op.succ.size > 0) {
+				int path_bound = 0;
+				for (int s : op.succ) {
+					auto& succ = this->ops[s];
+					path_bound = max(path_bound, succ.start_ub - op.dur);
+				}
+
+				op.start_ub = min(op.start_ub, path_bound);
+			}
+		}
+	}
 }
+
+
+void Instance::set_max_bound()
+{
+	queue<int> q;
+
+	vector<int> n_out(this->n_ops());
+	for (int o = 0; o < this->n_ops(); o++) {
+		n_out[o] = this->ops[o].succ.size;
+	}
+
+	vector<int> dist(this->n_ops(), 0);
+
+	int total_dur = 0;
+	vector<int> train_dur(this->n_trains());
+
+	for (int t = 0; t < this->n_trains(); t++) {
+		auto& train = this->trains[t];
+		q.push(train.op_last());
+
+		while (!q.empty()) {
+			int o = q.front();
+			q.pop();
+
+			for (int p : this->ops[o].pred) {
+				dist[p] = max(dist[p], dist[o] + this->ops[p].dur);
+
+				n_out[p] -= 1;
+				if (n_out[p] == 0) {
+					q.push(p);
+				}
+			}
+		}
+
+		train_dur[t] = dist[train.op_start];
+		total_dur += train_dur[t];
+	}
+	
+
+	int max_bound = 0;
+	for (int o = 0; o < this->n_ops(); o++) {
+		auto& op = this->ops[o];
+
+		int op_bound = op.start_lb + dist[o] + total_dur - train_dur[op.train];
+		max_bound = max(max_bound, op_bound);
+	}
+
+	for (auto& op : this->ops) {
+		if (op.start_ub == INT_MAX) {
+			op.start_ub = max_bound;
+		}
+	}
+}
+
+
 
 
 void Instance::add_res_name(string res_name)
