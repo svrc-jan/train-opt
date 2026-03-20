@@ -1,7 +1,7 @@
 {
 	"tasks": [
 		{
-			"label": "Build release",
+			"label": "Build debug",
 			"dependsOn" : [
 				"cmake debug",
 				"cmake build"
@@ -12,7 +12,7 @@
 			}
 		},
 		{
-			"label": "Build debug",
+			"label": "Build release",
 			"dependsOn" : [
 				"cmake release",
 				"cmake build"

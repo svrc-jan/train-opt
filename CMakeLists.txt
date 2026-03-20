@@ -41,11 +41,14 @@ target_link_libraries(instance_test instance)
 add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
 
-add_executable(path_select_test apps/path_select_test.cpp)
-target_link_libraries(path_select_test path_select)
+# add_executable(path_select_test apps/path_select_test.cpp)
+# target_link_libraries(path_select_test path_select)
 
 add_executable(graph_test apps/graph_test.cpp)
 target_link_libraries(graph_test graph preprocess)
+
+add_executable(path_and_cycle_test apps/path_and_cycle_test.cpp)
+target_link_libraries(path_and_cycle_test path_and_cycle)
 
 
 

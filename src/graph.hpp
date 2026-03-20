@@ -26,7 +26,7 @@ public:
 	inline uint16_t deg_in(uint16_t v);
 
 	const std::vector<Path_entry>& make_path(
-		std::vector<uint16_t> targets, uint8_t* edge_valid=nullptr);
+		const std::vector<uint16_t>& targets, const uint8_t* edge_valid=nullptr);
 	inline const std::vector<Path_entry>& get_path() const { return this->path; }
 
 	std::vector<uint32_t> lower_bound = {};
@@ -42,10 +42,12 @@ private:
 	std::vector<Block> block_in_vec = {};
 
 	std::vector<Path_entry> path = {};
-	uint8_t* _edge_valid = nullptr;
+	const uint8_t* _edge_valid = nullptr;
 
 	inline Block& block_out(uint16_t v) { return this->block_out_vec[v/BLOCK_SIZE]; }
 	inline Block& block_in(uint16_t v) { return this->block_in_vec[v/BLOCK_SIZE]; }
+
+	void clear_blocks();
 
 	inline void clear_path();
 
@@ -85,6 +87,8 @@ struct Graph::Block
 
 	Block();
 	~Block() {}
+
+	void clear();
 
 	uint16_t add_edge(uint16_t v, const Edge& edge);
 	void remove_last_edges(uint16_t v, uint16_t n);

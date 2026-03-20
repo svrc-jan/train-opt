@@ -32,12 +32,16 @@ int main(int argc, char const *argv[])
 
 	Inst_stats stats;
 
+
+	Instance::Paths paths_;
 	for (const auto& entry : filesystem::directory_iterator("data/")) {
 		if (entry.is_directory()) {
 			continue;
 		}
 
 		Instance inst(entry.path());
+		auto paths = inst.get_random_paths();
+
 		stats.n_trains = max(stats.n_trains, inst.n_trains());
 		stats.n_ops = max(stats.n_ops, inst.n_ops());
 		stats.n_res = max(stats.n_res, inst.n_res());
@@ -64,6 +68,8 @@ int main(int argc, char const *argv[])
 			stats.coeff = max(stats.coeff, obj.coeff);
 			stats.increment = max(stats.increment, obj.increment);
 		}
+
+		paths_ = paths;
 	}
 
 

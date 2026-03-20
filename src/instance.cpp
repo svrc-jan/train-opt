@@ -1,9 +1,9 @@
 #include "instance.hpp"
 
 #include <cstdlib>
+#include <stdexcept>
 #include <set>
 #include <queue>
-#include <print>
 #include "utils/files.hpp"
 
 using namespace std;
@@ -16,10 +16,10 @@ Instance::Instance(const string& file_name)
 	this->parse(inst_jsn);
 	this->assign_arrays();
 	this->assign_pred_ops();
+	this->set_leading_trailing();
 	this->propagate_lower_bounds();
 	this->set_max_bound();
 	this->propagate_upper_bounds();
-	this->set_leading_trailing();
 }
 
 
@@ -83,7 +83,7 @@ void Instance::prepare(json inst_jsn)
 
 	this->data_ptr = malloc(data_size);
 	if (this->data_ptr == nullptr) {
-		exit(1);
+		throw bad_alloc();
 	}
 
 	this->trains.set_ptr(this->data_ptr);
@@ -343,14 +343,21 @@ void Instance::set_max_bound()
 		n_out[o] = this->ops[o].succ.size;
 	}
 
-	vector<tim_t> dist(this->n_ops(), 0);
+	vector<idx_t> op_cnt(this->n_ops());
+	vector<tim_t> dist(this->n_ops());
 
 	tim_t total_dur = 0;
 	vector<tim_t> train_dur(this->n_trains());
 
+	idx_t path_idx = 0;
+
 	for (size_t t = 0; t < this->n_trains(); t++) {
 		auto& train = this->trains[t];
-		q.push(train.op_last());
+
+		idx_t o_last = train.op_last(); 
+		op_cnt[o_last] = 1;
+		dist[o_last] = 0;
+		q.push(o_last);
 
 		while (!q.empty()) {
 			idx_t o = q.front();
@@ -358,6 +365,7 @@ void Instance::set_max_bound()
 
 			for (int p : this->ops[o].pred) {
 				dist[p] = max(dist[p], dist[o] + this->ops[p].dur);
+				op_cnt[p] = max(op_cnt[p], (uint16_t)(op_cnt[o] + 1));
 
 				n_out[p] -= 1;
 				if (n_out[p] == 0) {
@@ -368,7 +376,12 @@ void Instance::set_max_bound()
 
 		train_dur[t] = dist[train.op_start];
 		total_dur += train_dur[t];
+
+		train.path_idx = path_idx;
+		path_idx += op_cnt[train.op_start] - train.has_leading - train.has_trailing;
 	}
+
+	this->max_paths_len = path_idx;
 	
 
 	tim_t max_bound = 0;
@@ -399,10 +412,144 @@ void Instance::set_leading_trailing()
 }
 
 
+Instance::Paths Instance::get_random_paths() const
+{
+	Paths paths = this->get_empty_paths();
+
+	for (auto& train : this->trains) {
+		auto& path = paths.ops[train.idx];
+
+		idx_t o = train.op_start;
+
+		while (true) {
+			auto& op = this->ops[o];
+			if (!op.is_leading() && !op.is_trailing()) {
+				path.push_back(o);
+			}
+
+			if (op.succ.size == 0) {
+				break;
+			}
+			else if (op.succ.size == 1) {
+				o = op.succ[0];
+			}
+			else {
+				o = op.succ[random() % op.succ.size];
+			}
+		}
+	}
+
+	return paths;
+}
+
 
 void Instance::add_res_name(string res_name)
 {
 	if (this->res_name_to_idx.find(res_name) == this->res_name_to_idx.end()) {
 		this->res_name_to_idx[res_name] = this->n_res();
+	}
+}
+
+
+Instance::Paths::Paths(const Instance& inst)
+{
+	this->data_size = 
+		sizeof(Array<idx_t>)*inst.n_trains() + 
+		sizeof(idx_t)*inst.max_paths_len;
+
+	this->data_ptr = malloc(this->data_size);
+	if (this->data_ptr == nullptr) {
+		throw bad_alloc();
+	}
+
+	this->ops.set_ptr(this->data_ptr);
+	this->ops.size = inst.n_trains();
+
+	idx_t* ops_ptr = (idx_t*)this->ops.end();
+	for (size_t t = 0; t < this->ops.size; t++) {
+		this->ops[t].set_ptr(ops_ptr + inst.trains[t].path_idx);
+	}
+
+	this->clear();
+}
+
+
+Instance::Paths::~Paths()
+{
+	if (this->data_ptr != nullptr) {
+		free(nullptr);
+	}
+}
+
+
+Instance::Paths& Instance::Paths::operator=(const Paths& obj)
+{
+	if (this != &obj) {
+		this->copy(obj);
+	}
+
+	return *this;
+}
+
+
+Instance::Paths& Instance::Paths::operator=(Paths&& obj)
+{
+	if (this != &obj) {
+		this->move(obj);
+	}
+
+	return *this;
+}
+
+
+void Instance::Paths::copy(const Paths& obj)
+{
+	if (obj.data_ptr == nullptr) {
+		this->data_size = 0;
+		this->data_ptr = nullptr;
+		return;
+	}
+
+	this->data_size = obj.data_size;
+	this->data_ptr = malloc(this->data_size);
+	if (this->data_ptr == nullptr) {
+		throw bad_alloc();
+	}
+
+	this->ops.set_ptr(this->data_ptr);
+	this->ops.size = obj.ops.size;
+
+	idx_t* ops_ptr = (idx_t*)this->ops.end();
+	for (size_t t = 0; t < this->ops.size; t++) {
+		size_t diff = obj.ops[t].begin() - obj.ops[0].begin();
+		this->ops[t].set_ptr(ops_ptr + diff);
+		this->ops[t].size = obj.ops[t].size;
+
+		for (size_t i = 0; i < this->ops[t].size; i++) {
+			this->ops[t][i] = obj.ops[t][i];
+		} 
+	}
+}
+
+
+void Instance::Paths::move(Paths& obj)
+{
+	this->data_size = data_size;
+	this->data_ptr = obj.data_ptr;
+
+	obj.data_size = 0;
+	obj.data_ptr = nullptr;
+
+	this->ops.set_ptr(this->data_ptr);
+	this->ops.size = obj.ops.size;
+}
+
+
+
+
+void Instance::Paths::clear()
+{
+	for (auto& path : this->ops) {
+		path.size = 0;
 	}
 }

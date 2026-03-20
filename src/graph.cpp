@@ -23,9 +23,22 @@ void Graph::set_vertices(uint16_t num)
 	this->block_in_vec.resize(num_blocks, Block());
 	this->block_out_vec.resize(num_blocks, Block());
 
+	this->clear_blocks();
+
 	this->path.resize(num);
 }
 
+
+void Graph::clear_blocks()
+{
+	for (auto& block : this->block_in_vec) {
+		block.clear();
+	}
+
+	for (auto& block : this->block_out_vec) {
+		block.clear();
+	}
+}
 
 
 uint32_t Graph::add_edge(uint16_t v_from, uint16_t v_to, uint16_t dur)
@@ -46,7 +59,7 @@ uint32_t Graph::add_edge(uint16_t v_from, uint16_t v_to, uint16_t dur)
 
 
 const std::vector<Graph::Path_entry>& Graph::make_path(
-	vector<uint16_t> targets, uint8_t* edge_valid)
+	const vector<uint16_t>& targets, const uint8_t* edge_valid)
 {
 	this->clear_path();
 	this->_edge_valid = edge_valid;
@@ -93,9 +106,16 @@ void Graph::path_rec(uint16_t v)
 
 Graph::Block::Block()
 {
+	this->clear();
+}
+
+
+void Graph::Block::clear()
+{
 	for (size_t i = 0; i < BLOCK_SIZE; i++) {
 		this->range[i] = {0, 0};
 	}
+	this->edges.clear();
 }
 
 

@@ -25,8 +25,7 @@ public:
 	struct Op;
 	struct Train;
 	struct Obj;
-
-	void* data_ptr = nullptr;
+	class Paths;
 
 	Array<Train> trains = {nullptr, 0};
 	Array<Op> ops = {nullptr, 0};
@@ -42,11 +41,17 @@ public:
 	inline size_t n_op_pred() const { return this->op_pred.size; }
 	inline size_t n_op_res() const { return this->op_res.size; }
 
+	inline Paths get_empty_paths() const;
+	Paths get_random_paths() const;
 
 private:
+	void* data_ptr = nullptr;
+
 	Array<Res> op_res = {nullptr, 0};
 	Array<uint16_t> op_succ = {nullptr, 0};
 	Array<uint16_t> op_pred = {nullptr, 0};
+
+	idx_t max_paths_len = 0;
 
 	std::map<std::string, uint16_t> res_name_to_idx = {};
 
@@ -115,6 +120,7 @@ struct Instance::Train
 	idx_t op_start = IDX_MAX;
 	uint8_t has_leading = 0;
 	uint8_t has_trailing = 0;
+	idx_t path_idx = IDX_MAX;
 	Array<Op> ops = {nullptr, 0};
 
 	inline idx_t op_last() const { return op_start + this->ops.size - 1; }
@@ -125,6 +131,41 @@ struct Instance::Train
 const size_t op_struct_bytes = sizeof(Instance::Op);
 const size_t train_struct_bytes = sizeof(Instance::Train);
 
+
+class Instance::Paths
+{
+private:
+	void* data_ptr = nullptr;
+	size_t data_size = 0;
+
+	void copy(const Paths& obj);
+	void move(Paths& obj);
+
+public:
+	Array<Array<idx_t>> ops = {nullptr, 0};
+
+	Paths() : data_ptr(nullptr), data_size(0) {}
+	Paths(const Instance& inst);
+	Paths(const Paths& obj) { this->copy(obj); }
+	Paths(Paths&& obj) { this->move(obj); }
+	~Paths();
+
+	Paths& operator=(const Paths& obj);
+	Paths& operator=(Paths&& obj);
+
+	Array<idx_t>* begin() { return this->ops.begin(); }
+	Array<idx_t>* end() { return this->ops.end(); }
+	const Array<idx_t>* begin() const { return this->ops.begin(); }
+	const Array<idx_t>* end() const { return this->ops.end(); }
+
+	void clear();
+};
+
+
+inline Instance::Paths Instance::get_empty_paths() const
+{
+	return Paths(*this);
+}
 
 inline bool Instance::Op::is_leading() const
 {
