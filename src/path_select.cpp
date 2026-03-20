@@ -74,11 +74,10 @@ void Path_select::propagate_junct_time(vector<int>& junct_time)
 			
 			int path_time = INT_MAX;
 			
-			for (int o : junct.ops_in) {
-				int dur = this->inst.ops[o].dur;
-				int j_pred = this->prepr.ops[o].junct_start;
+			for (auto& pred : junct.pred) {
+				int dur = this->inst.ops[pred.op].dur;
 
-				path_time = min(path_time, junct_time[j_pred] + dur);
+				path_time = min(path_time, junct_time[pred.junct] + dur);
 			}
 
 			if (path_time < INT_MAX) {

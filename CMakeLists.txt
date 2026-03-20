@@ -5,7 +5,11 @@ project(train_opt)
 set(CMAKE_CXX_COMPILER g++-14)
 set(CMAKE_CXX_STANDARD 23)
 
-add_compile_options(-Wall -Wextra -g)
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_PROFILING "-g -pg -O3")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/exe)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
@@ -27,6 +31,8 @@ message(STATUS "gurobi - api lib: " ${GUROBI_API_LIB}
 	", base lib: " ${GUROBI_BASE_LIB} 
 	", include: " ${GUROBI_INC})
 
+message(STATUS "compile flags: " ${CMAKE_CXX_})
+
 add_subdirectory(src)
 
 add_executable(instance_test apps/instance_test.cpp)
@@ -38,8 +44,13 @@ target_link_libraries(preprocess_test preprocess)
 add_executable(path_select_test apps/path_select_test.cpp)
 target_link_libraries(path_select_test path_select)
 
+add_executable(graph_test apps/graph_test.cpp)
+target_link_libraries(graph_test graph preprocess)
+
+
 
 # optimize stable parts
-target_compile_options(instance PRIVATE -O3)
-target_compile_options(preprocess PRIVATE -O3)
-target_compile_options(path_select PRIVATE -O3)
+# target_compile_options(instance PRIVATE -O3)
+# target_compile_options(preprocess PRIVATE -O3)
+# target_compile_options(path_select PRIVATE -O3)
+# target_compile_options(graph PRIVATE -O3)

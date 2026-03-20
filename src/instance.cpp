@@ -1,5 +1,6 @@
 #include "instance.hpp"
 
+#include <cstdlib>
 #include <set>
 #include <queue>
 #include <print>
@@ -18,58 +19,101 @@ Instance::Instance(const string& file_name)
 	this->propagate_lower_bounds();
 	this->set_max_bound();
 	this->propagate_upper_bounds();
+	this->set_leading_trailing();
+}
+
+
+Instance::~Instance()
+{
+	if (this->data_ptr != nullptr) {
+		free(this->data_ptr);
+	}
 }
 
 
 void Instance::prepare(json inst_jsn)
 {
-	int ops_size = 0;
-	int trains_size = 0;
-	int succ_size = 0;
-	int op_res_size = 0;
-	int objs_size = 0;
+	this->trains.size = 0;
+	this->ops.size = 0;
+	this->op_res.size = 0;
+	this->op_succ.size = 0;
 
+	set<idx_t> res_set;
+	int n_res_dups = 0;
 	for (const json& train_jsn : inst_jsn["trains"]) {
-		trains_size++;
+		this->trains.size++;
 
 		for (const json& op_jsn : train_jsn) {
-			ops_size++;
+			this->ops.size++;
 
-			succ_size += op_jsn["successors"].size();
+			this->op_succ.size += op_jsn["successors"].size();
 			if (op_jsn.contains("resources")) {
-				op_res_size += op_jsn["resources"].size();
+				res_set.clear();
 				for (const auto& res_jsn : op_jsn["resources"]) {
 					this->add_res_name(res_jsn["resource"]);
+
+					int res_idx = this->res_name_to_idx[res_jsn["resource"]];
+
+					if (res_set.find(res_idx) != res_set.end()) {
+						n_res_dups += 1;
+						continue;
+					}
+
+					res_set.insert(res_idx);
+					this->op_res.size += 1;
 				}
 			}
 		}
 	}
 
-	objs_size = inst_jsn["objective"].size();
+	// if (n_res_dups > 0) {
+	// 	cout << "res doups: " << n_res_dups;
+	// }
 
+	this->objs.size = inst_jsn["objective"].size();
+	this->op_pred.size = this->op_succ.size;
 
-	this->ops.reserve(ops_size);
-	this->trains.reserve(trains_size);
-	this->op_succ.reserve(succ_size);
-	this->op_res.reserve(op_res_size);
-	this->objs.reserve(objs_size);
+	size_t data_size = 
+		this->trains.n_bytes()	+
+		this->ops.n_bytes()		+
+		this->objs.n_bytes()	+
+		this->op_res.n_bytes()	+
+		this->op_succ.n_bytes() +
+		this->op_pred.n_bytes();
+
+	this->data_ptr = malloc(data_size);
+	if (this->data_ptr == nullptr) {
+		exit(1);
+	}
+
+	this->trains.set_ptr(this->data_ptr);
+	this->ops.set_ptr(this->trains.end());
+	this->op_res.set_ptr(this->ops.end());
+	this->op_succ.set_ptr(this->op_res.end());
+	this->op_pred.set_ptr(this->op_succ.end());
+	this->objs.set_ptr(this->op_pred.end());
 }
 
 
 void Instance::parse(json inst_jsn)
 {
-	set<int> res_set;
-	int n_res_duplicates = 0;
+	this->trains.size = 0;
+	this->ops.size = 0;
+	this->op_res.size = 0;
+	this->op_succ.size = 0;
+
+	set<idx_t> res_set;
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		Train train;
+		train.idx = this->n_trains();
 		train.op_start = this->n_ops();
 
 		for (const json& op_jsn : train_jsn) {
 			Op op;
 			
+			op.idx = this->n_ops();
 			op.train = this->n_trains();
-
 			op.dur = op_jsn["min_duration"];
 			
 			if (op_jsn.contains("start_lb")) {
@@ -99,32 +143,47 @@ void Instance::parse(json inst_jsn)
 					}
 
 					if (res_set.find(res.idx) != res_set.end()) {
-						n_res_duplicates += 1;
-						continue;
+						bool res_found = false;
+						for (size_t i = 0; i < res_set.size(); i++) {
+							Res res_find = this->op_res[this->op_res.size - i - 1];
+							if (res_find.idx == res.idx) {
+								res_find.time = max(res_find.time, res.time);
+								res_found = true;
+								break;
+							}
+						}
+						assert(res_found);	
 					}
-					res_set.insert(res.idx);
+					else {
+						res_set.insert(res.idx);
 
-					op.res.size += 1;
-					this->op_res.push_back(res);
+						op.res.size += 1;
+						this->op_res.push_back(res);
+					}
+					
 				}
 			}
+
+			// assert(op.succ.size > 0 || op.res.size == 0);
 
 			train.ops.size += 1;
 			this->ops.push_back(op);
 		}
 
-		this->max_n_train_ops = max(this->max_n_train_ops, train.ops.size);
 		this->trains.push_back(train);
 	}
 
-	this->op_res.shrink_to_fit();
-
-	vector<int> op_obj_idx(this->n_ops(), -1);
+	this->objs.size = 0;
 
 	for (const json& obj_jsn : inst_jsn["objective"]) {
 		assert(obj_jsn["type"] == "op_delay");
 
 		Obj obj;
+		int train_i = obj_jsn["train"];
+		int op_i = obj_jsn["operation"];
+
+		obj.op = this->trains[train_i].op_start + op_i;
+		
 		if (obj_jsn.contains("threshold")) {
 			obj.threshold = obj_jsn["threshold"];
 		}
@@ -141,29 +200,20 @@ void Instance::parse(json inst_jsn)
 			continue;
 		}
 
-
-		int train_i = obj_jsn["train"];
-		int op_i = obj_jsn["operation"];
-
-		int op_idx = this->trains[train_i].op_start + op_i;
-
-		op_obj_idx[op_idx] = this->objs.size();
 		this->objs.push_back(obj);
 	}
 
-	for (int o = 0; o < this->n_ops(); o++) {
-		if (op_obj_idx[o] >= 0) {
-			this->ops[o].obj = &(this->objs[op_obj_idx[o]]);
-		}
+	for (size_t i = 0; i < this->objs.size; i++) {
+		this->ops[this->objs[i].op].obj = i;
 	}
 
 }
 
 void Instance::assign_arrays()
 {
-	int ops_idx = 0;
-	int op_succ_idx = 0;
-	int op_res_idx = 0;
+	size_t ops_idx = 0;
+	size_t op_succ_idx = 0;
+	size_t op_res_idx = 0;
 
 	for (Train& train : this->trains) {
 		assert(train.op_start == ops_idx);
@@ -183,53 +233,47 @@ void Instance::assign_arrays()
 
 void Instance::assign_pred_ops()
 {
-	this->op_pred.resize(this->n_op_succ());
-
 	for (const Op& op : this->ops) {
 		for (int s : op.succ) {
 			this->ops[s].pred.size += 1;
 		}
 	}
 
-	int idx = 0;
+	size_t idx = 0;
 	for (Op& op : this->ops) {
 		op.pred.assign_ptr(this->op_pred, idx);
+		op.pred.size = 0;
 	}
 	assert(idx == this->n_op_pred());
 
-	vector<int> pred_filled(this->n_ops(), 0);
-	for (int o = 0; o < this->n_ops(); o++) {
-		for (int s : this->ops[o].succ) {
-			this->ops[s].pred[pred_filled[s]++] = o;
+	for (size_t o = 0; o < this->n_ops(); o++) {
+		for (idx_t s : this->ops[o].succ) {
+			this->ops[s].pred.push_back(o);
 		}
-	}
-
-	for (int o = 0; o < this->n_ops(); o++) {
-		assert(this->ops[o].pred.size == pred_filled[o]);
 	}
 }
 
 
 void Instance::propagate_lower_bounds()
 {
-	queue<int> q;
+	queue<idx_t> q;
 
-	vector<int> n_in(this->n_ops());
-	for (int o = 0; o < this->n_ops(); o++) {
+	vector<idx_t> n_in(this->n_ops());
+	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_in[o] = this->ops[o].pred.size;
 	}
 
-	for (int t = 0; t < this->n_trains(); t++) {
+	for (size_t t = 0; t < this->n_trains(); t++) {
 		auto& train = this->trains[t];
 		q.push(train.op_start);
 
 		while (!q.empty()) {
-			int o = q.front();
+			idx_t o = q.front();
 			q.pop();
 
 			auto& op = this->ops[o];
 
-			for (int s : op.succ) {
+			for (idx_t s : op.succ) {
 				n_in[s] -= 1;
 				if (n_in[s] == 0) {
 					q.push(s);
@@ -237,8 +281,8 @@ void Instance::propagate_lower_bounds()
 			}
 			
 			if (op.pred.size > 0) {
-				int path_bound = INT_MAX;
-				for (int p : op.pred) {
+				tim_t path_bound = UINT32_MAX;
+				for (idx_t p : op.pred) {
 					auto& pred = this->ops[p];
 					path_bound = min(path_bound, pred.start_lb + pred.dur);
 				}
@@ -252,24 +296,24 @@ void Instance::propagate_lower_bounds()
 
 void Instance::propagate_upper_bounds()
 {
-	queue<int> q;
+	queue<idx_t> q;
 
-	vector<int> n_out(this->n_ops());
-	for (int o = 0; o < this->n_ops(); o++) {
+	vector<idx_t> n_out(this->n_ops());
+	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_out[o] = this->ops[o].succ.size;
 	}
 
-	for (int t = 0; t < this->n_trains(); t++) {
+	for (size_t t = 0; t < this->n_trains(); t++) {
 		auto& train = this->trains[t];
 		q.push(train.op_last());
 
 		while (!q.empty()) {
-			int o = q.front();
+			idx_t o = q.front();
 			q.pop();
 
 			auto& op = this->ops[o];
 
-			for (int p : op.pred) {
+			for (idx_t p : op.pred) {
 				n_out[p] -= 1;
 				if (n_out[p] == 0) {
 					q.push(p);
@@ -277,7 +321,7 @@ void Instance::propagate_upper_bounds()
 			}
 			
 			if (op.succ.size > 0) {
-				int path_bound = 0;
+				tim_t path_bound = 0;
 				for (int s : op.succ) {
 					auto& succ = this->ops[s];
 					path_bound = max(path_bound, succ.start_ub - op.dur);
@@ -292,24 +336,24 @@ void Instance::propagate_upper_bounds()
 
 void Instance::set_max_bound()
 {
-	queue<int> q;
+	queue<idx_t> q;
 
-	vector<int> n_out(this->n_ops());
-	for (int o = 0; o < this->n_ops(); o++) {
+	vector<idx_t> n_out(this->n_ops());
+	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_out[o] = this->ops[o].succ.size;
 	}
 
-	vector<int> dist(this->n_ops(), 0);
+	vector<tim_t> dist(this->n_ops(), 0);
 
-	int total_dur = 0;
-	vector<int> train_dur(this->n_trains());
+	tim_t total_dur = 0;
+	vector<tim_t> train_dur(this->n_trains());
 
-	for (int t = 0; t < this->n_trains(); t++) {
+	for (size_t t = 0; t < this->n_trains(); t++) {
 		auto& train = this->trains[t];
 		q.push(train.op_last());
 
 		while (!q.empty()) {
-			int o = q.front();
+			idx_t o = q.front();
 			q.pop();
 
 			for (int p : this->ops[o].pred) {
@@ -327,21 +371,32 @@ void Instance::set_max_bound()
 	}
 	
 
-	int max_bound = 0;
-	for (int o = 0; o < this->n_ops(); o++) {
+	tim_t max_bound = 0;
+	for (size_t o = 0; o < this->n_ops(); o++) {
 		auto& op = this->ops[o];
 
-		int op_bound = op.start_lb + dist[o] + total_dur - train_dur[op.train];
+		tim_t op_bound = op.start_lb + dist[o] + total_dur - train_dur[op.train];
 		max_bound = max(max_bound, op_bound);
 	}
 
 	for (auto& op : this->ops) {
-		if (op.start_ub == INT_MAX) {
+		if (op.start_ub == TIME_MAX) {
 			op.start_ub = max_bound;
 		}
 	}
 }
 
+
+void Instance::set_leading_trailing()
+{
+	for (auto& train : this->trains) {
+		auto& op_start = this->ops[train.op_start];
+		auto& op_last = this->ops[train.op_last()];
+
+		train.has_leading = op_start.res.size == 0;
+		train.has_trailing = op_last.res.size == 0;
+	}
+}
 
 
 

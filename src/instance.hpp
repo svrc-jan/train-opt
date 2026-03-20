@@ -1,5 +1,5 @@
 #pragma once
-#include <limits>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
@@ -8,6 +8,14 @@
 #include "utils/array.hpp"
 
 using json = nlohmann::json;
+
+#define IDX_MAX UINT16_MAX
+#define TIME_MAX UINT32_MAX
+#define DUR_MAX UINT16_MAX
+
+typedef uint16_t idx_t;
+typedef uint32_t tim_t;
+typedef uint16_t dur_t;
 
 
 class Instance
@@ -18,28 +26,29 @@ public:
 	struct Train;
 	struct Obj;
 
-	int max_n_train_ops = 0;
+	void* data_ptr = nullptr;
 
-	std::vector<Train> trains = {};
-	std::vector<Op> ops = {};
-	std::vector<Obj> objs = {};
+	Array<Train> trains = {nullptr, 0};
+	Array<Op> ops = {nullptr, 0};
+	Array<Obj>  objs = {nullptr, 0};
 
 	Instance(const std::string& file_name);
+	~Instance();
 
-	inline int n_trains() const { return this->trains.size(); }
-	inline int n_ops() const { return this->ops.size(); }
-	inline int n_res() const { return this->res_name_to_idx.size(); }
-	inline int n_op_succ() const { return this->op_succ.size(); }
-	inline int n_op_pred() const { return this->op_pred.size(); }
-	inline int n_op_res() const { return this->op_res.size(); }
+	inline size_t n_trains() const { return this->trains.size; }
+	inline size_t n_ops() const { return this->ops.size; }
+	inline size_t n_res() const { return this->res_name_to_idx.size(); }
+	inline size_t n_op_succ() const { return this->op_succ.size; }
+	inline size_t n_op_pred() const { return this->op_pred.size; }
+	inline size_t n_op_res() const { return this->op_res.size; }
 
 
 private:
-	std::vector<int> op_succ = {};
-	std::vector<int> op_pred = {};
-	std::vector<Res> op_res = {};
-	std::vector<int> train_topo_order = {};
-	std::map<std::string, int> res_name_to_idx = {};
+	Array<Res> op_res = {nullptr, 0};
+	Array<uint16_t> op_succ = {nullptr, 0};
+	Array<uint16_t> op_pred = {nullptr, 0};
+
+	std::map<std::string, uint16_t> res_name_to_idx = {};
 
 	void prepare(json inst_jsn);
 	void parse(json inst_jsn);
@@ -49,6 +58,7 @@ private:
 	void propagate_lower_bounds();
 	void propagate_upper_bounds();
 	void set_max_bound();
+	void set_leading_trailing();
 
 	void add_res_name(std::string res_name);
 };
@@ -56,8 +66,8 @@ private:
 
 struct Instance::Res
 {
-	int idx = -1;
-	int time = 0;
+	idx_t idx = IDX_MAX;
+	dur_t time = 0;
 
 	bool operator<(const Res& other) const { return this->idx < other.idx; }
 	bool operator==(const Res& other) const { return this->idx == other.idx; }
@@ -66,35 +76,66 @@ struct Instance::Res
 	bool operator==(int other) const { return this->idx == other; }
 };
 
+
 struct Instance::Obj
 {
-	int threshold = 0;
-	int coeff = 0;
-	int increment = 0;
+
+	idx_t op = IDX_MAX;
+	uint8_t coeff = 0;
+	uint8_t increment = 0;
+	tim_t threshold = 0;
 };
+
+const int obj_size = sizeof(Instance::Obj);
 
 
 struct Instance::Op
 {
-	int train = -1;
-	
-	int dur = 0;
-	int start_lb = 0;
-	int start_ub = INT_MAX;
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	idx_t obj = IDX_MAX;
 
-	Obj* obj = nullptr;
+	dur_t dur = 0;
 
-	Array<int> succ = {nullptr, 0};
-	Array<int> pred = {nullptr, 0};
+	tim_t start_lb = 0;
+	tim_t start_ub = TIME_MAX;
+
+	Array<idx_t> succ = {nullptr, 0};
+	Array<idx_t> pred = {nullptr, 0};
 	Array<Res> res = {nullptr, 0};
+
+	inline bool is_leading() const;
+	inline bool is_trailing() const;
 };
 
 
 struct Instance::Train
 {
-	int op_start = -1;
+	idx_t idx = IDX_MAX;
+	idx_t op_start = IDX_MAX;
+	uint8_t has_leading = 0;
+	uint8_t has_trailing = 0;
 	Array<Op> ops = {nullptr, 0};
 
-	inline int op_last() const { return this->op_start + this->ops.size - 1; }
-	inline int op_end() const { return this->op_start + this->ops.size; }
+	inline idx_t op_last() const { return op_start + this->ops.size - 1; }
+	inline idx_t op_end() const { return op_start + this->ops.size; }
 };
+
+
+const size_t op_struct_bytes = sizeof(Instance::Op);
+const size_t train_struct_bytes = sizeof(Instance::Train);
+
+
+inline bool Instance::Op::is_leading() const
+{
+	return (this->pred.size == 0) && (this->res.size == 0);
+}
+
+
+inline bool Instance::Op::is_trailing() const
+{
+	return (this->succ.size == 0) && (this->res.size == 0);
+}
+
+
+

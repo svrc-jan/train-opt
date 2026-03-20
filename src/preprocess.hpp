@@ -1,6 +1,5 @@
 #pragma once
 
-#include "utils/array.hpp"
 #include "instance.hpp"
 
 class Preprocess
@@ -10,6 +9,8 @@ public:
 	struct Junction;
 	struct Level;
 	struct Train;
+
+	struct Junct_op;
 	
 	const Instance& inst;
 
@@ -20,53 +21,64 @@ public:
 	
 	Preprocess(const Instance& inst);
 	
-	inline int n_juncts() const { return this->juncts.size(); }
-	inline int n_levels() const { return this->levels.size(); }
+	inline size_t n_juncts() const { return this->juncts.size(); }
+	inline size_t n_levels() const { return this->levels.size(); }
 	
 private:
-	std::vector<int> junct_ops_in = {};
-	std::vector<int> junct_ops_out = {};
+	std::vector<Junct_op> junct_succ = {};
+	std::vector<Junct_op> junct_pred = {};
 
 	void make_junctions();
+	void make_junctions_bounds();
+
 	void make_levels();
 };
 
 
 struct Preprocess::Op
 {
-	int junct_start = -1;
-	int junct_end   = -1;
-	int level_start = -1;
-	int level_end   = -1;
+	idx_t junct_start = IDX_MAX;
+	idx_t junct_end   = IDX_MAX;
+	idx_t level_start = IDX_MAX;
+	idx_t level_end   = IDX_MAX;
 };
 
 struct Preprocess::Junction
 {
-	int time_lb = 0;
-	int time_ub = INT_MAX;
+	tim_t time_lb = 0;
+	tim_t time_ub = TIME_MAX;
 
-	Array<int> ops_in  = {nullptr, 0};
-	Array<int> ops_out = {nullptr, 0};
+	Array<Junct_op> succ  = {nullptr, 0};
+	Array<Junct_op> pred = {nullptr, 0};
 };
 
 
 struct Preprocess::Level
 {
-	Array<int> juncts = {nullptr, 0};
+	tim_t time_lb = 0;
+	tim_t time_ub = TIME_MAX;
+	Array<uint16_t> juncts = {nullptr, 0};
 };
 
 
 struct Preprocess::Train
 {
-	int junct_start = -1;
-	int level_start = -1;
+	idx_t junct_start = IDX_MAX;
+	idx_t level_start = IDX_MAX;
 
 	Array<Junction> juncts = {nullptr, 0}; 
 	Array<Level> levels = {nullptr, 0};
 	
-	inline int junct_last() const { return this->junct_start + this->juncts.size - 1; }
-	inline int junct_end() const { return this->junct_start + this->juncts.size; }
+	inline idx_t junct_last() const { return this->junct_start + this->juncts.size - 1; }
+	inline idx_t junct_end() const { return this->junct_start + this->juncts.size; }
 
-	inline int level_last() const { return this->level_start + this->levels.size - 1; }
-	inline int level_end() const { return this->level_start + this->levels.size; }
+	inline idx_t level_last() const { return this->level_start + this->levels.size - 1; }
+	inline idx_t level_end() const { return this->level_start + this->levels.size; }
+};
+
+
+struct Preprocess::Junct_op
+{
+	idx_t junct = IDX_MAX;
+	idx_t op = IDX_MAX;
 };
