@@ -1,15 +1,85 @@
 {
 	"tasks": [
 		{
-			"label": "Build all debug",
-			"type": "shell",
-			"command": "cmake . && cmake --build . --target all -j 8"
-			,
+			"label": "Build release",
+			"dependsOn" : [
+				"cmake debug",
+				"cmake build"
+			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			}
 		},
+		{
+			"label": "Build debug",
+			"dependsOn" : [
+				"cmake release",
+				"cmake build"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Build profiling",
+			"dependsOn" : [
+				"cmake profiling",
+				"cmake build"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "cmake build clean",
+			"type": "shell",
+			"command": "cmake --build . --clean-first --target all -j 8"
+			,
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "cmake build",
+			"type": "shell",
+			"command": "cmake --build . --target all -j 8"
+			,
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "cmake debug",
+			"type": "shell",
+			"command": "cmake -DCMAKE_BUILD_TYPE=Debug .",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "cmake release",
+			"type": "shell",
+			"command": "cmake -DCMAKE_BUILD_TYPE=Release .",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "cmake profiling",
+			"type": "shell",
+			"command": "cmake -DCMAKE_BUILD_TYPE=Profiling .",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		}
 	],
 	"version": "2.0.0"
 }

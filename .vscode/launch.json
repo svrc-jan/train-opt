@@ -4,7 +4,9 @@
 			"name": "Debug",
 			"type": "cppdbg",
 			"request": "launch",
-			
+
+			// "preLaunchTask": "Build debug",
+
 			"program": "${input:target}",
 			"args": [
 				"${input:instance}"
