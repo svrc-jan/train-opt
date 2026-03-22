@@ -55,10 +55,8 @@ int main(int argc, char const *argv[])
 		targets[t] = prepr.trains[t].junct_last();
 	}
 
-	graph.lower_bound = lower_bound;
-
 	t1 = chrono::high_resolution_clock::now();
-	auto& path = graph.make_path(targets);
+	auto& path = graph.make_path(targets, lower_bound.data());
 	t2 = chrono::high_resolution_clock::now();
 	
 	auto dur3 = (t2 - t1).count();

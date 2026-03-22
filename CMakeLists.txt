@@ -6,8 +6,8 @@ set(CMAKE_CXX_COMPILER g++-14)
 set(CMAKE_CXX_STANDARD 23)
 
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -save-temps")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_PROFILING "-g -pg -O3")
 
@@ -49,8 +49,6 @@ target_link_libraries(graph_test graph preprocess)
 
 add_executable(path_and_cycle_test apps/path_and_cycle_test.cpp)
 target_link_libraries(path_and_cycle_test path_and_cycle)
-
-
 
 # optimize stable parts
 # target_compile_options(instance PRIVATE -O3)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/block_list.hpp"
+#include "utils/array.hpp"
 #include "instance.hpp"
 #include "graph.hpp"
 
@@ -16,21 +16,47 @@ public:
 	void solve();
 
 private:
-	struct Item_o2g;
+	struct Edge;
+	struct Switch;
+	struct Vtx_time;
 
 	Graph graph;
 	Instance::Paths paths;
 
-	std::vector<Item_o2g> o2g = {};
-	std::vector<uint16_t> v_end = {};
+	std::vector<Edge> op2edge = {};
+	std::vector<Switch> vtx2sw = {};
+	std::vector<Vtx_time> vtx_order = {};
 
-	Block_list<std::pair<idx_t, dur_t>> res_uses;
+	std::vector<idx_t> v_start = {};
+	std::vector<idx_t> v_last = {};
+
+	std::vector<tim_t> time_lb = {};
+	std::vector<tim_t> time = {};
+
+	void make_vtx_order();
+
+	void merge_sort_vtx_order(idx_t t_left, idx_t t_right);
+	void merge_vtx_order(idx_t t_left, idx_t t_mid, idx_t t_right);
 };
 
 
-struct Path_and_cycle::Item_o2g
+struct Path_and_cycle::Edge
 {
-	uint16_t start = UINT16_MAX;
-	uint16_t end = UINT16_MAX;
-	uint32_t edge = UINT32_MAX;
+	edge_t idx = EDGE_MAX;
+	vertex_t start = VERTEX_MAX;
+	vertex_t end = VERTEX_MAX;
+};
+
+struct Path_and_cycle::Switch
+{
+	idx_t op_unlock = IDX_MAX;
+	idx_t op_lock = IDX_MAX;
+};
+
+
+struct Path_and_cycle::Vtx_time
+{
+	idx_t vertex = IDX_MAX;
+	idx_t train = IDX_MAX;
+	tim_t time = TIME_MAX;
 };

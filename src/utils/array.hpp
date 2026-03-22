@@ -37,8 +37,8 @@ struct Array
 	template<typename X>
 	ssize_t find_sorted(const X& x) const;
 
-	void assign_ptr(const std::vector<T>& vec, size_t& idx);
-	void assign_ptr(const Array<T>& arr, size_t& idx);
+	void assign_ptr(const std::vector<T>& vec, size_t& idx, bool set_zero_size=false);
+	void assign_ptr(const Array<T>& arr, size_t& idx, bool set_zero_size=false);
 };
 
 template<typename T>
@@ -104,20 +104,32 @@ ssize_t Array<T>::find_sorted(const X& x) const
 
 
 template<typename T>
-void Array<T>::assign_ptr(const std::vector<T>& vec, size_t& idx)
+void Array<T>::assign_ptr(const std::vector<T>& vec, size_t& idx, bool set_zero_size)
 {
 	if (this->size > 0) {
 		this->ptr = (T*)vec.data() + idx;
 		idx += this->size;
+		if (set_zero_size) {
+			this->size = 0;
+		}
+	}
+	else {
+		this->ptr = nullptr;
 	}
 }
 
 
 template<typename T>
-void Array<T>::assign_ptr(const Array<T>& arr, size_t& idx)
+void Array<T>::assign_ptr(const Array<T>& arr, size_t& idx, bool set_zero_size)
 {
 	if (this->size > 0) {
 		this->ptr = arr.ptr + idx;
 		idx += this->size;
+		if (set_zero_size) {
+			this->size = 0;
+		}
+	}
+	else {
+		this->ptr = nullptr;
 	}
 }

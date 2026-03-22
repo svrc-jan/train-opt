@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <set>
 #include <queue>
+
+#include "utils/optim_defs.h"
 #include "utils/files.hpp"
 
 using namespace std;
@@ -40,6 +42,7 @@ void Instance::prepare(json inst_jsn)
 
 	set<idx_t> res_set;
 	int n_res_dups = 0;
+
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		this->trains.size++;
 
@@ -241,8 +244,7 @@ void Instance::assign_pred_ops()
 
 	size_t idx = 0;
 	for (Op& op : this->ops) {
-		op.pred.assign_ptr(this->op_pred, idx);
-		op.pred.size = 0;
+		op.pred.assign_ptr(this->op_pred, idx, true);
 	}
 	assert(idx == this->n_op_pred());
 
@@ -296,14 +298,17 @@ void Instance::propagate_lower_bounds()
 
 void Instance::propagate_upper_bounds()
 {
+	
 	queue<idx_t> q;
 
 	vector<idx_t> n_out(this->n_ops());
+
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_out[o] = this->ops[o].succ.size;
 	}
 
 	for (size_t t = 0; t < this->n_trains(); t++) {
+
 		auto& train = this->trains[t];
 		q.push(train.op_last());
 
@@ -336,9 +341,10 @@ void Instance::propagate_upper_bounds()
 
 void Instance::set_max_bound()
 {
-	queue<idx_t> q;
+	queue<idx_t> qs[OMP_NUM_THR];
 
 	vector<idx_t> n_out(this->n_ops());
+	OMP_STATIC
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_out[o] = this->ops[o].succ.size;
 	}
@@ -351,7 +357,10 @@ void Instance::set_max_bound()
 
 	idx_t path_idx = 0;
 
+	OMP_DYNAMIC
 	for (size_t t = 0; t < this->n_trains(); t++) {
+		auto& q = qs[OMP_THR_ID];
+
 		auto& train = this->trains[t];
 
 		idx_t o_last = train.op_last(); 
@@ -385,6 +394,8 @@ void Instance::set_max_bound()
 	
 
 	tim_t max_bound = 0;
+
+	OMP_STATIC
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		auto& op = this->ops[o];
 
@@ -392,6 +403,7 @@ void Instance::set_max_bound()
 		max_bound = max(max_bound, op_bound);
 	}
 
+	OMP_STATIC
 	for (auto& op : this->ops) {
 		if (op.start_ub == TIME_MAX) {
 			op.start_ub = max_bound;
@@ -402,6 +414,8 @@ void Instance::set_max_bound()
 
 void Instance::set_leading_trailing()
 {
+	
+	OMP_STATIC_SMALL
 	for (auto& train : this->trains) {
 		auto& op_start = this->ops[train.op_start];
 		auto& op_last = this->ops[train.op_last()];
@@ -416,6 +430,8 @@ Instance::Paths Instance::get_random_paths() const
 {
 	Paths paths = this->get_empty_paths();
 
+	
+	OMP_DYNAMIC
 	for (auto& train : this->trains) {
 		auto& path = paths.ops[train.idx];
 
@@ -451,98 +467,26 @@ void Instance::add_res_name(string res_name)
 }
 
 
+
+
 Instance::Paths::Paths(const Instance& inst)
 {
-	this->data_size = 
-		sizeof(Array<idx_t>)*inst.n_trains() + 
-		sizeof(idx_t)*inst.max_paths_len;
+	this->ops.resize(inst.n_trains());
+	this->data.resize(inst.max_paths_len);
 
-	this->data_ptr = malloc(this->data_size);
-	if (this->data_ptr == nullptr) {
-		throw bad_alloc();
+	OMP_STATIC_SMALL
+	for (size_t t = 0; t < inst.n_trains(); t++) {
+		this->ops[t].set_ptr(this->data.data() + inst.trains[t].path_idx);
+		this->ops[t].size = 0;
 	}
-
-	this->ops.set_ptr(this->data_ptr);
-	this->ops.size = inst.n_trains();
-
-	idx_t* ops_ptr = (idx_t*)this->ops.end();
-	for (size_t t = 0; t < this->ops.size; t++) {
-		this->ops[t].set_ptr(ops_ptr + inst.trains[t].path_idx);
-	}
-
-	this->clear();
 }
 
 
 Instance::Paths::~Paths()
 {
-	if (this->data_ptr != nullptr) {
-		free(nullptr);
-	}
+
 }
 
-
-Instance::Paths& Instance::Paths::operator=(const Paths& obj)
-{
-	if (this != &obj) {
-		this->copy(obj);
-	}
-
-	return *this;
-}
-
-
-Instance::Paths& Instance::Paths::operator=(Paths&& obj)
-{
-	if (this != &obj) {
-		this->move(obj);
-	}
-
-	return *this;
-}
-
-
-void Instance::Paths::copy(const Paths& obj)
-{
-	if (obj.data_ptr == nullptr) {
-		this->data_size = 0;
-		this->data_ptr = nullptr;
-		return;
-	}
-
-	this->data_size = obj.data_size;
-	this->data_ptr = malloc(this->data_size);
-	if (this->data_ptr == nullptr) {
-		throw bad_alloc();
-	}
-
-	this->ops.set_ptr(this->data_ptr);
-	this->ops.size = obj.ops.size;
-
-	idx_t* ops_ptr = (idx_t*)this->ops.end();
-	for (size_t t = 0; t < this->ops.size; t++) {
-		size_t diff = obj.ops[t].begin() - obj.ops[0].begin();
-		this->ops[t].set_ptr(ops_ptr + diff);
-		this->ops[t].size = obj.ops[t].size;
-
-		for (size_t i = 0; i < this->ops[t].size; i++) {
-			this->ops[t][i] = obj.ops[t][i];
-		} 
-	}
-}
-
-
-void Instance::Paths::move(Paths& obj)
-{
-	this->data_size = data_size;
-	this->data_ptr = obj.data_ptr;
-
-	obj.data_size = 0;
-	obj.data_ptr = nullptr;
-
-	this->ops.set_ptr(this->data_ptr);
-	this->ops.size = obj.ops.size;
-}
 
 
 

@@ -3,9 +3,17 @@
 #include <cstdint>
 #include <vector>
 #include <queue>
-#include "utils/array.hpp"
 
-#define BLOCK_SIZE 64
+typedef uint32_t edge_t;
+typedef uint16_t vertex_t;
+typedef uint32_t gtime_t;
+typedef uint16_t gdur_t;
+
+#define EDGE_MAX UINT32_MAX
+#define VERTEX_MAX UINT16_MAX
+#define GTIME_MAX UINT32_MAX
+#define GDUR_MAX UINT16_MAX
+
 
 class Graph
 {
@@ -16,119 +24,51 @@ public:
 	Graph();
 	~Graph();
 
-	void set_vertices(uint16_t num);
-	uint32_t add_edge(uint16_t v_from, uint16_t v_to, uint16_t dur);
-	
-	inline Array<Edge> edges_out(uint16_t v);
-	inline Array<Edge> edges_in(uint16_t v);
+	void set_vertices(vertex_t num);
+	uint32_t add_edge(vertex_t v_from, vertex_t v_to, gdur_t dur);
 
-	inline uint16_t deg_out(uint16_t v);
-	inline uint16_t deg_in(uint16_t v);
+	inline size_t deg_out(vertex_t v) { return this->edges_out[v].size(); } 
+	inline size_t deg_in(vertex_t v) { return this->edges_in[v].size(); }
 
-	const std::vector<Path_entry>& make_path(
-		const std::vector<uint16_t>& targets, const uint8_t* edge_valid=nullptr);
+	const std::vector<Path_entry>& make_path(const std::vector<vertex_t>& targets,
+		const gtime_t* lower_bound=nullptr, const uint8_t* edge_valid=nullptr);
+
 	inline const std::vector<Path_entry>& get_path() const { return this->path; }
 
-	std::vector<uint32_t> lower_bound = {};
 
 private:
-	
 	struct Idx_size;
 	struct Block;
 
-	uint16_t next_edge_idx = 0;
-	
-	std::vector<Block> block_out_vec = {};
-	std::vector<Block> block_in_vec = {};
+	uint32_t next_edge_idx = 0;
+	std::vector<edge_t> free_edge_idx = {};
+
+	std::vector<std::vector<Edge>> edges_in;
+	std::vector<std::vector<Edge>> edges_out;
 
 	std::vector<Path_entry> path = {};
+	const gtime_t* _lower_bound = nullptr;
 	const uint8_t* _edge_valid = nullptr;
 
-	inline Block& block_out(uint16_t v) { return this->block_out_vec[v/BLOCK_SIZE]; }
-	inline Block& block_in(uint16_t v) { return this->block_in_vec[v/BLOCK_SIZE]; }
-
-	void clear_blocks();
-
-	inline void clear_path();
-
-	void path_rec(uint16_t v);
-
+	edge_t get_free_edge_idx();
+	
+	void clear_path();
+	void path_rec(vertex_t v);
 };
 
 
 struct Graph::Edge
 {
-	uint32_t idx = UINT32_MAX;
-	uint16_t vertex = UINT16_MAX;
-	uint16_t dur = 0;
+	edge_t idx = EDGE_MAX;
+	vertex_t vertex = VERTEX_MAX;
+	gdur_t dur = 0;
 };
 
 
 struct Graph::Path_entry
 {
-	uint32_t time = 0;
-	uint32_t edge = UINT32_MAX;
-	uint16_t pred = UINT16_MAX;
+	gtime_t time = 0;
+	edge_t edge = EDGE_MAX;
+	vertex_t pred = VERTEX_MAX;
 	uint8_t done = 0;
 };
-
-
-struct Graph::Idx_size
-{
-	uint16_t idx = 0;
-	uint16_t size = 0;
-};
-
-
-struct Graph::Block
-{
-	Idx_size range[BLOCK_SIZE];
-	std::vector<Edge> edges = {};
-
-	Block();
-	~Block() {}
-
-	void clear();
-
-	uint16_t add_edge(uint16_t v, const Edge& edge);
-	void remove_last_edges(uint16_t v, uint16_t n);
-
-	inline Array<Edge> get_edges(uint16_t v);
-	inline uint16_t deg(uint16_t v) { return this->range[v % BLOCK_SIZE].size; }
-};
-
-
-inline Array<Graph::Edge> Graph::edges_out(uint16_t v)
-{
-	return this->block_out(v).get_edges(v);
-}
-
-inline Array<Graph::Edge> Graph::edges_in(uint16_t v)
-{
-	return this->block_in(v).get_edges(v);
-}
-
-inline uint16_t Graph::deg_out(uint16_t v)
-{
-	return this->block_out(v).deg(v);
-}
-
-inline uint16_t Graph::deg_in(uint16_t v)
-{
-	return this->block_in(v).deg(v);
-}
-
-
-inline void Graph::clear_path()
-{
-	for (auto& x : this->path) { 
-		x.done = 0;
-	}
-}
-
-
-inline Array<Graph::Edge> Graph::Block::get_edges(uint16_t v)
-{
-	auto& r = this->range[v % BLOCK_SIZE];
-	return { &(this->edges[r.idx]), r.size };
-}

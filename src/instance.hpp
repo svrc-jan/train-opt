@@ -135,28 +135,21 @@ const size_t train_struct_bytes = sizeof(Instance::Train);
 class Instance::Paths
 {
 private:
-	void* data_ptr = nullptr;
-	size_t data_size = 0;
-
-	void copy(const Paths& obj);
-	void move(Paths& obj);
+	std::vector<idx_t> data = {};
 
 public:
-	Array<Array<idx_t>> ops = {nullptr, 0};
-
-	Paths() : data_ptr(nullptr), data_size(0) {}
+	std::vector<Array<idx_t>> ops = {};
+	
+	Paths() : data({}), ops({}) {}
 	Paths(const Instance& inst);
-	Paths(const Paths& obj) { this->copy(obj); }
-	Paths(Paths&& obj) { this->move(obj); }
 	~Paths();
 
-	Paths& operator=(const Paths& obj);
-	Paths& operator=(Paths&& obj);
+	auto begin() { return this->ops.begin(); }
+	auto end() { return this->ops.end(); }
+	auto begin() const { return this->ops.begin(); }
+	auto end() const { return this->ops.end(); }
 
-	Array<idx_t>* begin() { return this->ops.begin(); }
-	Array<idx_t>* end() { return this->ops.end(); }
-	const Array<idx_t>* begin() const { return this->ops.begin(); }
-	const Array<idx_t>* end() const { return this->ops.end(); }
+	auto& operator[](size_t idx) { return this->ops[idx]; }
 
 	void clear();
 };
