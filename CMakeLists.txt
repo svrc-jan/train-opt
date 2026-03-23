@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 23)
 
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -save-temps")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_PROFILING "-g -pg -O3")
 

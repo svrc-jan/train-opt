@@ -22,6 +22,8 @@ int main(int argc, char const *argv[])
 	Instance inst(file_name);
 	Path_and_cycle pnc(inst);
 
+	srandom(43);
+
 	pnc.set_paths(inst.get_random_paths());
 	pnc.solve();
 

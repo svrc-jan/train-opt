@@ -31,7 +31,7 @@ public:
 	inline size_t deg_in(vertex_t v) { return this->edges_in[v].size(); }
 
 	const std::vector<Path_entry>& make_path(const std::vector<vertex_t>& targets,
-		const gtime_t* lower_bound=nullptr, const uint8_t* edge_valid=nullptr);
+		const std::vector<gtime_t>& lower_bound, const uint8_t* edge_valid=nullptr);
 
 	inline const std::vector<Path_entry>& get_path() const { return this->path; }
 
@@ -53,7 +53,7 @@ private:
 	edge_t get_free_edge_idx();
 	
 	void clear_path();
-	void path_rec(vertex_t v);
+	void path_rec(vertex_t v, const std::vector<gtime_t>& lower_bound);
 };
 
 

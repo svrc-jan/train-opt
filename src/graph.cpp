@@ -53,14 +53,13 @@ edge_t Graph::get_free_edge_idx()
 }
 
 const std::vector<Graph::Path_entry>& Graph::make_path(const vector<vertex_t>& targets,
-	 const gtime_t* lower_bound, const uint8_t* edge_valid)
+	 const std::vector<gtime_t>& lower_bound, const uint8_t* edge_valid)
 {
 	this->clear_path();
-	this->_lower_bound = lower_bound;
 	this->_edge_valid = edge_valid;
 
 	for (vertex_t v : targets) {
-		this->path_rec(v);
+		this->path_rec(v, lower_bound);
 	}
 
 	this->_lower_bound = nullptr;
@@ -77,31 +76,22 @@ void Graph::clear_path()
 }
 
 
-void Graph::path_rec(vertex_t v)
+void Graph::path_rec(vertex_t v, const std::vector<gtime_t>& lower_bound)
 {
 	if (this->path[v].done) {
 		return;
 	}
 
-	this->path[v] = {
-		.time = (this->_lower_bound == 0) ? 0 : this->_lower_bound[v],
-		.edge = EDGE_MAX,
-		.pred = VERTEX_MAX,
-		.done = 1
-	};
+	gtime_t new_time = lower_bound[v];
+	this->path[v] = {new_time, EDGE_MAX, VERTEX_MAX, 1};
 
 	for (auto& edge : this->edges_in[v]) {
 		if (this->_edge_valid == nullptr || this->_edge_valid[edge.idx]) {
-			this->path_rec(edge.vertex);
-			gtime_t new_time = this->path[edge.vertex].time + edge.dur;
+			this->path_rec(edge.vertex, lower_bound);
+			new_time = this->path[edge.vertex].time + edge.dur;
 
 			if (new_time > this->path[v].time) {
-				this->path[v] = {
-					.time = new_time,
-					.edge = edge.idx,
-					.pred = edge.vertex,
-					.done = 1
-				};
+				this->path[v] = {new_time, edge.idx, edge.vertex, 1};
 			}
 		}
 	}
