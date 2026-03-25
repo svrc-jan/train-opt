@@ -1,84 +1,37 @@
 {
 	"tasks": [
 		{
-			"label": "Build debug",
-			"dependsOn" : [
-				"cmake debug",
-				"cmake build"
+			"label": "CMake: Build current Release",
+			"type": "shell",
+			"command": "cmake --build . --target ${fileBasenameNoExtension} --config Release -j 8",
+			"dependsOn": [
+				"CMake: Configure"
 			],
 			"group": {
 				"kind": "build",
-				"isDefault": true
+				"isDefault": "${workspaceFolder}/apps/*.cpp"
 			}
 		},
 		{
-			"label": "Build release",
-			"dependsOn" : [
-				"cmake release",
-				"cmake build"
+			"label": "CMake: Build current Debug",
+			"type": "shell",
+			"command": "cmake --build . --target ${fileBasenameNoExtension} --config Debug -j 8",
+			"dependsOn": [
+				"CMake: Configure"
 			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"group": "build"
 		},
 		{
-			"label": "Build profiling",
-			"dependsOn" : [
-				"cmake profiling",
-				"cmake build"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
-		},
-		{
-			"label": "cmake build clean",
+			"label": "CMake: Build clean",
 			"type": "shell",
-			"command": "cmake --build . --clean-first --target all -j 8"
-			,
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
+			"command": "cmake --build . --target clean",
+			"group": "build"
 		},
 		{
-			"label": "cmake build",
+			"label": "CMake: Configure",
 			"type": "shell",
-			"command": "cmake --build . --target all -j 8"
-			,
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
-		},
-		{
-			"label": "cmake debug",
-			"type": "shell",
-			"command": "cmake -DCMAKE_BUILD_TYPE=Debug .",
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
-		},
-		{
-			"label": "cmake release",
-			"type": "shell",
-			"command": "cmake -DCMAKE_BUILD_TYPE=Release .",
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
-		},
-		{
-			"label": "cmake profiling",
-			"type": "shell",
-			"command": "cmake -DCMAKE_BUILD_TYPE=Profiling .",
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
+			"command": "cmake .",
+			"group": "build"
 		}
 	],
 	"version": "2.0.0"

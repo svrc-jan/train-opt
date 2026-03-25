@@ -5,16 +5,16 @@
 			"type": "cppdbg",
 			"request": "launch",
 
-			// "preLaunchTask": "Build debug",
+			"preLaunchTask": "CMake: Build current Debug",
 
-			"program": "${input:target}",
+			"program": "${workspaceFolder}/build/${fileBasenameNoExtension}_Debug",
 			"args": [
 				"${input:instance}"
 			],
 
 			"cwd": "${workspaceFolder}",
 			"stopAtEntry": false,
-			"launchCompleteCommand": "exec-run",
+			// "launchCompleteCommand": "exec-run",
 			
 			"MIMode": "gdb",
 			"miDebuggerPath": "/usr/bin/gdb",
@@ -29,16 +29,6 @@
 		}
 	],
 	"inputs": [
-		{
-			"id": "target",
-			"type": "command",
-			"command": "extension.commandvariable.file.pickFile",
-			"args" : {
-				"description" : "Select target",
-				"include" : "build/exe/*",
-				"display" : "fileName"
-			}
-		},
 		{
 			"id": "instance",
 			"type": "command",

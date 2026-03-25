@@ -3,8 +3,11 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <ranges>
+
 #include <nlohmann/json.hpp>
 
+#include "utils/macros.hpp"
 #include "utils/array.hpp"
 
 using json = nlohmann::json;
@@ -27,19 +30,22 @@ public:
 	struct Obj;
 	class Paths;
 
-	Array<Train> trains = {nullptr, 0};
-	Array<Op> ops = {nullptr, 0};
-	Array<Obj>  objs = {nullptr, 0};
+	Array<Train> trains;
+	Array<Op> ops;
+	Array<Obj> objs;
 
 	Instance(const std::string& file_name);
 	~Instance();
 
-	inline size_t n_trains() const { return this->trains.size; }
-	inline size_t n_ops() const { return this->ops.size; }
+	METHOD_N(trains)
+	METHOD_N(ops)
+	METHOD_N(op_succ)
+	METHOD_N(op_pred)
+	METHOD_N(op_res)
 	inline size_t n_res() const { return this->res_name_to_idx.size(); }
-	inline size_t n_op_succ() const { return this->op_succ.size; }
-	inline size_t n_op_pred() const { return this->op_pred.size; }
-	inline size_t n_op_res() const { return this->op_res.size; }
+
+	inline auto ops_range() const { return std::views::iota(0U, this->n_ops()); }
+	inline auto trains_range() const { return std::views::iota(0U, this->n_trains()); }
 
 	inline Paths get_empty_paths() const;
 	Paths get_random_paths() const;
@@ -47,9 +53,9 @@ public:
 private:
 	void* data_ptr = nullptr;
 
-	Array<Res> op_res = {nullptr, 0};
-	Array<uint16_t> op_succ = {nullptr, 0};
-	Array<uint16_t> op_pred = {nullptr, 0};
+	Array<Res> op_res;
+	Array<uint16_t> op_succ;
+	Array<uint16_t> op_pred;
 
 	idx_t max_paths_len = 0;
 
@@ -105,26 +111,31 @@ struct Instance::Op
 	tim_t start_lb = 0;
 	tim_t start_ub = TIME_MAX;
 
-	Array<idx_t> succ = {nullptr, 0};
-	Array<idx_t> pred = {nullptr, 0};
-	Array<Res> res = {nullptr, 0};
+	Array<idx_t> succ;
+	Array<idx_t> pred;
+	Array<Res> res;
 
 	inline bool is_leading() const;
 	inline bool is_trailing() const;
+
+	METHOD_N(succ)
+	METHOD_N(pred)
+	METHOD_N(res)
 };
 
 
 struct Instance::Train
 {
 	idx_t idx = IDX_MAX;
-	idx_t op_start = IDX_MAX;
+	idx_t op_first = IDX_MAX;
+	idx_t path_idx = IDX_MAX;
 	uint8_t has_leading = 0;
 	uint8_t has_trailing = 0;
-	idx_t path_idx = IDX_MAX;
-	Array<Op> ops = {nullptr, 0};
+	Array<Op> ops;
 
-	inline idx_t op_last() const { return op_start + this->ops.size - 1; }
-	inline idx_t op_end() const { return op_start + this->ops.size; }
+	METHOD_N(ops)
+	METHOD_AFTER(op)
+	METHOD_LAST(op)
 };
 
 
@@ -162,13 +173,13 @@ inline Instance::Paths Instance::get_empty_paths() const
 
 inline bool Instance::Op::is_leading() const
 {
-	return (this->pred.size == 0) && (this->res.size == 0);
+	return (this->pred.empty() == 0) && (this->res.empty() == 0);
 }
 
 
 inline bool Instance::Op::is_trailing() const
 {
-	return (this->succ.size == 0) && (this->res.size == 0);
+	return (this->succ.empty() == 0) && (this->res.empty() == 0);
 }
 
 

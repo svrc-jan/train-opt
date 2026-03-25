@@ -35,21 +35,21 @@ Instance::~Instance()
 
 void Instance::prepare(json inst_jsn)
 {
-	this->trains.size = 0;
-	this->ops.size = 0;
-	this->op_res.size = 0;
-	this->op_succ.size = 0;
+	this->trains.clear();
+	this->ops.clear();
+	this->op_res.clear();
+	this->op_succ.clear();
 
 	set<idx_t> res_set;
 	int n_res_dups = 0;
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
-		this->trains.size++;
+		this->trains.increment_size(1);
 
 		for (const json& op_jsn : train_jsn) {
-			this->ops.size++;
+			this->ops.increment_size(1);
 
-			this->op_succ.size += op_jsn["successors"].size();
+			this->op_succ.increment_size(op_jsn["successors"].size());
 			if (op_jsn.contains("resources")) {
 				res_set.clear();
 				for (const auto& res_jsn : op_jsn["resources"]) {
@@ -63,7 +63,7 @@ void Instance::prepare(json inst_jsn)
 					}
 
 					res_set.insert(res_idx);
-					this->op_res.size += 1;
+					this->op_res.increment_size(1);
 				}
 			}
 		}
@@ -73,8 +73,8 @@ void Instance::prepare(json inst_jsn)
 	// 	cout << "res doups: " << n_res_dups;
 	// }
 
-	this->objs.size = inst_jsn["objective"].size();
-	this->op_pred.size = this->op_succ.size;
+	this->objs.set_size(inst_jsn["objective"].size());
+	this->op_pred.set_size(this->op_succ.size());
 
 	size_t data_size = 
 		this->trains.n_bytes()	+
@@ -89,28 +89,28 @@ void Instance::prepare(json inst_jsn)
 		throw bad_alloc();
 	}
 
-	this->trains.set_ptr(this->data_ptr);
-	this->ops.set_ptr(this->trains.end());
-	this->op_res.set_ptr(this->ops.end());
-	this->op_succ.set_ptr(this->op_res.end());
-	this->op_pred.set_ptr(this->op_succ.end());
-	this->objs.set_ptr(this->op_pred.end());
+	this->trains = this->data_ptr;
+	this->ops = this->trains.end();
+	this->op_res = this->ops.end();
+	this->op_succ = this->op_res.end();
+	this->op_pred = this->op_succ.end();
+	this->objs = this->op_pred.end();
 }
 
 
 void Instance::parse(json inst_jsn)
 {
-	this->trains.size = 0;
-	this->ops.size = 0;
-	this->op_res.size = 0;
-	this->op_succ.size = 0;
+	this->trains.clear();
+	this->ops.clear();
+	this->op_res.clear();
+	this->op_succ.clear();
 
 	set<idx_t> res_set;
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		Train train;
 		train.idx = this->n_trains();
-		train.op_start = this->n_ops();
+		train.op_first = this->n_ops();
 
 		for (const json& op_jsn : train_jsn) {
 			Op op;
@@ -127,13 +127,13 @@ void Instance::parse(json inst_jsn)
 				op.start_ub = op_jsn["start_ub"];
 			}
 
-			op.succ.size = 0;
+			op.succ.clear();
 			for (int s : op_jsn["successors"]) {
-				op.succ.size += 1;
-				this->op_succ.push_back(s + train.op_start);
+				op.succ.increment_size(1);
+				this->op_succ.push_back(s + train.op_first);
 			}
 
-			op.res.size = 0;
+			op.res.clear();
 			if (op_jsn.contains("resources")) {
 				res_set.clear();
 
@@ -148,7 +148,7 @@ void Instance::parse(json inst_jsn)
 					if (res_set.find(res.idx) != res_set.end()) {
 						bool res_found = false;
 						for (size_t i = 0; i < res_set.size(); i++) {
-							Res res_find = this->op_res[this->op_res.size - i - 1];
+							Res res_find = this->op_res[this->op_res.size() - i - 1];
 							if (res_find.idx == res.idx) {
 								res_find.time = max(res_find.time, res.time);
 								res_found = true;
@@ -160,7 +160,7 @@ void Instance::parse(json inst_jsn)
 					else {
 						res_set.insert(res.idx);
 
-						op.res.size += 1;
+						op.res.increment_size(1);
 						this->op_res.push_back(res);
 					}
 					
@@ -169,14 +169,14 @@ void Instance::parse(json inst_jsn)
 
 			// assert(op.succ.size > 0 || op.res.size == 0);
 
-			train.ops.size += 1;
+			train.ops.increment_size(1);
 			this->ops.push_back(op);
 		}
 
 		this->trains.push_back(train);
 	}
 
-	this->objs.size = 0;
+	this->objs.clear();
 
 	for (const json& obj_jsn : inst_jsn["objective"]) {
 		assert(obj_jsn["type"] == "op_delay");
@@ -185,7 +185,7 @@ void Instance::parse(json inst_jsn)
 		int train_i = obj_jsn["train"];
 		int op_i = obj_jsn["operation"];
 
-		obj.op = this->trains[train_i].op_start + op_i;
+		obj.op = this->trains[train_i].op_first + op_i;
 		
 		if (obj_jsn.contains("threshold")) {
 			obj.threshold = obj_jsn["threshold"];
@@ -206,7 +206,7 @@ void Instance::parse(json inst_jsn)
 		this->objs.push_back(obj);
 	}
 
-	for (size_t i = 0; i < this->objs.size; i++) {
+	for (size_t i = 0; i < this->objs.size(); i++) {
 		this->ops[this->objs[i].op].obj = i;
 	}
 
@@ -219,12 +219,12 @@ void Instance::assign_arrays()
 	size_t op_res_idx = 0;
 
 	for (Train& train : this->trains) {
-		assert(train.op_start == ops_idx);
-		train.ops.assign_ptr(this->ops, ops_idx);
+		assert(train.op_first == ops_idx);
+		train.ops.assign_offset(this->ops, ops_idx);
 
 		for (Op& op : train.ops) {
-			op.succ.assign_ptr(this->op_succ, op_succ_idx);
-			op.res.assign_ptr(this->op_res, op_res_idx);
+			op.succ.assign_offset(this->op_succ, op_succ_idx);
+			op.res.assign_offset(this->op_res, op_res_idx);
 		}
 	}
 
@@ -238,13 +238,13 @@ void Instance::assign_pred_ops()
 {
 	for (const Op& op : this->ops) {
 		for (int s : op.succ) {
-			this->ops[s].pred.size += 1;
+			this->ops[s].pred.increment_size(1);
 		}
 	}
 
 	size_t idx = 0;
 	for (Op& op : this->ops) {
-		op.pred.assign_ptr(this->op_pred, idx, true);
+		op.pred.assign_offset(this->op_pred, idx, true);
 	}
 	assert(idx == this->n_op_pred());
 
@@ -262,12 +262,12 @@ void Instance::propagate_lower_bounds()
 
 	vector<idx_t> n_in(this->n_ops());
 	for (size_t o = 0; o < this->n_ops(); o++) {
-		n_in[o] = this->ops[o].pred.size;
+		n_in[o] = this->ops[o].pred.size();
 	}
 
 	for (size_t t = 0; t < this->n_trains(); t++) {
 		auto& train = this->trains[t];
-		q.push(train.op_start);
+		q.push(train.op_first);
 
 		while (!q.empty()) {
 			idx_t o = q.front();
@@ -282,7 +282,7 @@ void Instance::propagate_lower_bounds()
 				}
 			}
 			
-			if (op.pred.size > 0) {
+			if (!op.pred.empty() > 0) {
 				tim_t path_bound = UINT32_MAX;
 				for (idx_t p : op.pred) {
 					auto& pred = this->ops[p];
@@ -304,7 +304,7 @@ void Instance::propagate_upper_bounds()
 	vector<idx_t> n_out(this->n_ops());
 
 	for (size_t o = 0; o < this->n_ops(); o++) {
-		n_out[o] = this->ops[o].succ.size;
+		n_out[o] = this->ops[o].succ.size();
 	}
 
 	for (size_t t = 0; t < this->n_trains(); t++) {
@@ -325,7 +325,7 @@ void Instance::propagate_upper_bounds()
 				}
 			}
 			
-			if (op.succ.size > 0) {
+			if (!op.succ.empty()) {
 				tim_t path_bound = 0;
 				for (int s : op.succ) {
 					auto& succ = this->ops[s];
@@ -346,7 +346,7 @@ void Instance::set_max_bound()
 	vector<idx_t> n_out(this->n_ops());
 	OMP_STATIC
 	for (size_t o = 0; o < this->n_ops(); o++) {
-		n_out[o] = this->ops[o].succ.size;
+		n_out[o] = this->ops[o].succ.size();
 	}
 
 	vector<idx_t> op_cnt(this->n_ops());
@@ -383,11 +383,11 @@ void Instance::set_max_bound()
 			}
 		}
 
-		train_dur[t] = dist[train.op_start];
+		train_dur[t] = dist[train.op_first];
 		total_dur += train_dur[t];
 
 		train.path_idx = path_idx;
-		path_idx += op_cnt[train.op_start] - train.has_leading - train.has_trailing;
+		path_idx += op_cnt[train.op_first] - train.has_leading - train.has_trailing;
 	}
 
 	this->max_paths_len = path_idx;
@@ -417,11 +417,11 @@ void Instance::set_leading_trailing()
 	
 	OMP_STATIC_SMALL
 	for (auto& train : this->trains) {
-		auto& op_start = this->ops[train.op_start];
+		auto& op_first = this->ops[train.op_first];
 		auto& op_last = this->ops[train.op_last()];
 
-		train.has_leading = op_start.res.size == 0;
-		train.has_trailing = op_last.res.size == 0;
+		train.has_leading = op_first.res.empty();
+		train.has_trailing = op_last.res.empty();
 	}
 }
 
@@ -435,7 +435,7 @@ Instance::Paths Instance::get_random_paths() const
 	for (auto& train : this->trains) {
 		auto& path = paths.ops[train.idx];
 
-		idx_t o = train.op_start;
+		idx_t o = train.op_first;
 
 		while (true) {
 			auto& op = this->ops[o];
@@ -443,14 +443,14 @@ Instance::Paths Instance::get_random_paths() const
 				path.push_back(o);
 			}
 
-			if (op.succ.size == 0) {
+			if (op.succ.empty()) {
 				break;
 			}
-			else if (op.succ.size == 1) {
+			else if (op.succ.size() == 1) {
 				o = op.succ[0];
 			}
 			else {
-				o = op.succ[random() % op.succ.size];
+				o = op.succ[random() % op.succ.size()];
 			}
 		}
 	}
@@ -476,24 +476,19 @@ Instance::Paths::Paths(const Instance& inst)
 
 	OMP_STATIC_SMALL
 	for (size_t t = 0; t < inst.n_trains(); t++) {
-		this->ops[t].set_ptr(this->data.data() + inst.trains[t].path_idx);
-		this->ops[t].size = 0;
+		this->ops[t].set_begin(this->data.data() + inst.trains[t].path_idx);
+		this->ops[t].clear();
 	}
 }
-
 
 Instance::Paths::~Paths()
 {
 
 }
 
-
-
-
-
 void Instance::Paths::clear()
 {
 	for (auto& path : this->ops) {
-		path.size = 0;
+		path.clear();
 	}
 }

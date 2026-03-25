@@ -10,8 +10,6 @@
 using namespace std;
 
 
-
-
 Preprocess::Preprocess(const Instance& inst) : inst(inst)
 {
 	this->trains.resize(this->inst.n_trains(), Train());
@@ -25,7 +23,7 @@ void Preprocess::make_junctions()
 	size_t n_ops = this->inst.n_ops();
 	const size_t n_trains = this->inst.n_trains();
 
-	this->ops.resize(n_ops, Op());
+	this->op_junct.resize(n_ops, {IDX_MAX, IDX_MAX});
 	this->trains.resize(n_trains, Train());
 
 	int junct_idx = 0;
@@ -36,71 +34,70 @@ void Preprocess::make_junctions()
 		auto& inst_train = this->inst.trains[t];
 		auto& train = this->trains[t];
 
-		Disjoint_set disj_set(inst_train.ops.size);
+		Disjoint_set disj_set(inst_train.ops.size());
 
 		for (auto& op : inst_train.ops) {
-			for (size_t i = 0; i < op.succ.size; i++) {
-				for (size_t j = i + 1; j < op.succ.size; j++) {
-					int a = op.succ[i] - inst_train.op_start;
-					int b = op.succ[j] - inst_train.op_start;
+			for (auto it_a = op.succ.begin(); it_a < op.succ.end(); it_a++) {
+				for (auto it_b = it_a + 1; it_b < op.succ.end(); it_b++) {
+					int a = *it_a - inst_train.op_first;
+					int b = *it_b - inst_train.op_first;
 					disj_set.union_set(a, b);
 				}
 			}
 		}
 		
-		train.junct_start = junct_idx;
-		train.juncts.size = disj_set.n_sets + 1;
+		train.junct_first = junct_idx;
 
 		int diff = 0;
 		auto set_idx = disj_set.get_result();
 		
 		for (auto& op : inst_train.ops) {
-			if (op.res.size == 0 && (op.pred.size == 0 || op.succ.size == 0)) {
+			if (op.is_leading() || op.is_trailing()) {
 				diff += 1;
 				continue;
 			}
 
-			this->ops[op.idx].junct_start = set_idx[op.idx - inst_train.op_start] + 
-				train.junct_start - diff;
+			this->op_junct[op.idx].start = set_idx[op.idx - inst_train.op_first] + 
+				train.junct_first - diff;
 		}
 
-		train.juncts.size -= diff;
+		train.juncts.set_size(disj_set.n_sets + 1 - diff);
 
 		if (inst_train.has_trailing) {
 			for (idx_t p : this->inst.ops[inst_train.op_last()].pred) {
-				this->ops[p].junct_end = train.junct_last();
+				this->op_junct[p].end = train.junct_last();
 			}
 		}
 		else {
-			this->ops[inst_train.op_last()].junct_end = train.junct_last();
+			this->op_junct[inst_train.op_last()].end = train.junct_last();
 		}		
 
-		junct_idx += train.juncts.size;
+		junct_idx += train.juncts.size();
 	}
 
 
 	OMP_STATIC
-	for (auto& inst_op : this->inst.ops) {
-		auto& op = this->ops[inst_op.idx];
+	for (auto& op : this->inst.ops) {
+		auto& j_op = this->op_junct[op.idx];
 		
-		if (inst_op.is_leading() || inst_op.is_trailing()) {
-			assert(op.junct_start == IDX_MAX);
+		if (op.is_leading() || op.is_trailing()) {
+			assert(j_op.start == IDX_MAX);
 			continue;
 		}
 
-		assert(op.junct_start < junct_idx);
+		assert(j_op.start < junct_idx);
 
-		for (int p : inst_op.pred) {
+		for (int p : op.pred) {
 			if (this->inst.ops[p].is_leading()) {
 				continue;
 			}
 
-			auto& op_p = this->ops[p];
-			if (op_p.junct_end == UINT16_MAX) {
-				op_p.junct_end = op.junct_start;
+			auto& j_pred = this->op_junct[p];
+			if (j_pred.end == IDX_MAX) {
+				j_pred.end = j_op.start;
 			} 
 			else {
-				assert(op_p.junct_end == op.junct_start);
+				assert(j_pred.end == j_op.start);
 			}
 		}
 	}
@@ -109,18 +106,18 @@ void Preprocess::make_junctions()
 	this->juncts.resize(junct_idx, Junction());
 
 	OMP_STATIC
-	for (auto& inst_op : this->inst.ops) {
-		auto& op = this->ops[inst_op.idx];
+	for (auto& op : this->inst.ops) {
+		auto& j_op = this->op_junct[op.idx];
 
-		if (inst_op.is_leading() || inst_op.is_trailing()) {
-			assert(op.junct_end == IDX_MAX);
+		if (op.is_leading() || op.is_trailing()) {
+			assert(j_op.start == IDX_MAX);
 			continue;
 		}
 
-		assert(op.junct_end < junct_idx);
+		assert(j_op.end < junct_idx);
 
-		this->juncts[op.junct_start].succ.size += 1;
-		this->juncts[op.junct_end].pred.size += 1;
+		this->juncts[j_op.start].succ.increment_size(1);
+		this->juncts[j_op.end].pred.increment_size(1);
 
 		n_ops += 1;
 	}
@@ -133,21 +130,20 @@ void Preprocess::make_junctions()
 
 	OMP_STATIC
 	for (auto& junct : this->juncts) {
-		junct.succ.assign_ptr(this->junct_succ, succ_idx, true);
-		junct.pred.assign_ptr(this->junct_pred, pred_idx, true);
+		junct.succ.assign_offset(this->junct_succ, succ_idx, true);
+		junct.pred.assign_offset(this->junct_pred, pred_idx, true);
 	}
 
 	OMP_STATIC
-	for (auto& inst_op : this->inst.ops) {
-		if (inst_op.is_leading() || inst_op.is_trailing()) {
+	for (auto& op : this->inst.ops) {
+		if (op.is_leading() || op.is_trailing()) {
 			continue;
 		}
 
-		idx_t o = inst_op.idx;
-		auto& op = this->ops[o];
+		auto& j_op = this->op_junct[op.idx];
 
-		this->juncts[op.junct_start].succ.push_back({op.junct_end, (uint16_t)o});
-		this->juncts[op.junct_end].pred.push_back({op.junct_start, (uint16_t)o});
+		this->juncts[j_op.start].succ.push_back({j_op.end, op.idx});
+		this->juncts[j_op.end].pred.push_back({j_op.start, op.idx});
 	}
 }
 
@@ -172,7 +168,7 @@ void Preprocess::make_junctions_bounds()
 
 	OMP_STATIC
 	for (auto& junct : this->juncts) {
-		if (junct.succ.size > 0) {
+		if (!junct.succ.empty()) {
 			junct.time_lb = UINT32_MAX;
 			junct.time_ub = 0;
 
@@ -188,7 +184,7 @@ void Preprocess::make_junctions_bounds()
 
 void Preprocess::make_levels()
 {
-
+	
 }
 
 

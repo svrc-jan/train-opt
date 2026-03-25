@@ -86,6 +86,8 @@ void Path_and_cycle::solve()
 	bool ret = this->find_res_col(res_col);
 
 	this->make_res_col_edges(res_col);
+	res_col.swap();
+	this->make_res_col_edges(res_col);
 }
 
 
@@ -222,7 +224,33 @@ bool Path_and_cycle::find_res_col(Res_col& res_col)
 
 void Path_and_cycle::make_res_col_edges(const Res_col& res_col)
 {
-	this->fill_res_locks(this->v_start[res_col.t1], res_col.v1);
+	vertex_t v1 = res_col.v1;
+	vertex_t v2 = res_col.v2;
+
+	while (v1 <= this->v_last[res_col.t1] && v2 >= this->v_start[res_col.t2]) {
+		bool added = false;
+		for (auto& res1 : this->inst.ops[this->vtx2sw[v1].op_unlock].res) {
+			for (auto& res2 : this->inst.ops[this->vtx2sw[v2].op_unlock].res) {
+				if (res1.idx == res2.idx) {
+					added = true;
+				}
+			}
+		}
+
+		if (added) {
+			v1++;
+			v2--;
+		}
+		else {
+			break;
+		}
+	}
+
+
+	v1 = min(v1, this->v_last[res_col.t1]);
+	v2 = max(v2, this->v_start[res_col.t2]);
+
+	this->fill_res_locks(this->v_start[res_col.t1], v1);
 
 	this->res_col_edges.clear();
 
