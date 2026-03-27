@@ -8,6 +8,9 @@ target_link_libraries(preprocess instance disjoint_set)
 
 add_library(graph graph.cpp)
 
+add_library(path_graph path_graph.cpp)
+target_link_libraries(path_graph graph instance)
+
 add_library(path_and_cycle path_and_cycle.cpp)
 target_link_libraries(path_and_cycle instance graph)
 

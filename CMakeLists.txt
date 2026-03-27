@@ -6,6 +6,7 @@ set(CMAKE_CXX_COMPILER g++-14)
 set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_CONFIGURATION_TYPES Debug Release Profiling)
+message(STATUS "config types: " ${CMAKE_CONFIGURATION_TYPES})
 
 set(CMAKE_DEBUG_POSTFIX "_Debug")
 set(CMAKE_PROFILING_POSTFIX "_Profiling")
@@ -18,7 +19,7 @@ set(CMAKE_CXX_FLAGS_PROFILING "-g -pg -O3")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
-# set(CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/bpd)
+set(CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/bpd)
 
 
 include_directories(
@@ -49,7 +50,7 @@ target_link_libraries(preprocess_test preprocess)
 # target_link_libraries(path_select_test path_select)
 
 add_executable(graph_test apps/graph_test.cpp)
-target_link_libraries(graph_test graph preprocess)
+target_link_libraries(graph_test path_graph)
 
 add_executable(path_and_cycle_test apps/path_and_cycle_test.cpp)
 target_link_libraries(path_and_cycle_test path_and_cycle)

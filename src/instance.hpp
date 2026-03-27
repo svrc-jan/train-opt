@@ -34,6 +34,8 @@ public:
 	Array<Op> ops;
 	Array<Obj> objs;
 
+	idx_t max_paths_len = 0;
+
 	Instance(const std::string& file_name);
 	~Instance();
 
@@ -56,8 +58,6 @@ private:
 	Array<Res> op_res;
 	Array<uint16_t> op_succ;
 	Array<uint16_t> op_pred;
-
-	idx_t max_paths_len = 0;
 
 	std::map<std::string, uint16_t> res_name_to_idx = {};
 
@@ -157,10 +157,11 @@ public:
 
 	auto begin() { return this->ops.begin(); }
 	auto end() { return this->ops.end(); }
-	auto begin() const { return this->ops.begin(); }
-	auto end() const { return this->ops.end(); }
+	const auto begin() const { return this->ops.begin(); }
+	const auto end() const { return this->ops.end(); }
 
 	auto& operator[](size_t idx) { return this->ops[idx]; }
+	const auto& operator[](size_t idx) const { return this->ops[idx]; }
 
 	void clear();
 };

@@ -27,7 +27,7 @@ void Path_and_cycle::set_paths(const Instance::Paths& paths_)
 	vertex_t v = 0;
 
 	for (auto& path : this->paths) {
-		v += path.size + 1;
+		v += path.size() + 1;
 	}
 
 	this->time_lb.resize(v);

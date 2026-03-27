@@ -15,45 +15,56 @@ typedef uint16_t gdur_t;
 #define GDUR_MAX UINT16_MAX
 
 
+enum Vertex_state
+{
+	STATE_WAIT,
+	STATE_DONE,
+	STATE_ON_STACK
+};
+
+
 class Graph
 {
 public:
 	struct Edge;
-	struct Path_entry;
+	struct Search_entry;
 	
-	Graph();
-	~Graph();
+	Graph() {}
+	~Graph() {}
 
-	void set_vertices(vertex_t num);
-	uint32_t add_edge(vertex_t v_from, vertex_t v_to, gdur_t dur);
+	void set_vertices(const vertex_t num);
+	void clear_all();
+	uint32_t add_edge(const vertex_t v_from, const vertex_t v_to, const gdur_t dur);
 
-	inline size_t deg_out(vertex_t v) { return this->edges_out[v].size(); } 
-	inline size_t deg_in(vertex_t v) { return this->edges_in[v].size(); }
+	inline size_t deg_out(vertex_t v) const { return this->edges_out[v].size(); } 
+	inline size_t deg_in(vertex_t v) const { return this->edges_in[v].size(); }
 
-	const std::vector<Path_entry>& make_path(const std::vector<vertex_t>& targets,
-		const std::vector<gtime_t>& lower_bound, const uint8_t* edge_valid=nullptr);
+	vertex_t make_order(const std::vector<vertex_t>& v_start, const uint8_t* edge_valid=nullptr);
+	void make_time(const gtime_t* lower_bound, const uint8_t* edge_valid=nullptr);
 
-	inline const std::vector<Path_entry>& get_path() const { return this->path; }
+	inline const std::vector<Search_entry>& get_search() const { return this->search; }
 
 
 private:
-	struct Idx_size;
-	struct Block;
+	vertex_t n_vertex = 0;
 
 	uint32_t next_edge_idx = 0;
 	std::vector<edge_t> free_edge_idx = {};
 
-	std::vector<std::vector<Edge>> edges_in;
-	std::vector<std::vector<Edge>> edges_out;
+	std::vector<std::vector<Edge>> edges_in = {};
+	std::vector<std::vector<Edge>> edges_out = {};
 
-	std::vector<Path_entry> path = {};
-	const gtime_t* _lower_bound = nullptr;
-	const uint8_t* _edge_valid = nullptr;
+	std::vector<Search_entry> search = {};
+	std::vector<gtime_t> time = {};
+	std::vector<vertex_t> order_idx = {};
+	std::vector<vertex_t> order = {};
+	std::vector<vertex_t> stack = {};
 
 	edge_t get_free_edge_idx();
 	
-	void clear_path();
-	void path_rec(vertex_t v, const std::vector<gtime_t>& lower_bound);
+	void clear_search();
+	void clear_time();
+	vertex_t order_rec(const vertex_t v, const uint8_t* edge_valid);
 };
 
 
@@ -65,10 +76,10 @@ struct Graph::Edge
 };
 
 
-struct Graph::Path_entry
+struct Graph::Search_entry
 {
-	gtime_t time = 0;
-	edge_t edge = EDGE_MAX;
+	uint8_t state = STATE_WAIT;
+	uint8_t dirty = 0;
 	vertex_t pred = VERTEX_MAX;
-	uint8_t done = 0;
+	edge_t edge = EDGE_MAX;
 };

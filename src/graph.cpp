@@ -4,29 +4,42 @@
 
 using namespace std;
 
-Graph::Graph()
+
+void Graph::set_vertices(const vertex_t num)
 {
+	assert(num < VERTEX_MAX && num > 0);
+	this->n_vertex = num;
 
-}
-
-
-Graph::~Graph()
-{
-	
-}
-
-
-void Graph::set_vertices(uint16_t num)
-{
 	this->edges_in.resize(num, vector<Edge>(0));
 	this->edges_out.resize(num, vector<Edge>(0));
+	
+	this->search.resize(num);
+	this->time.resize(num);
+	this->order_idx.resize(num);
 
-	this->path.resize(num);
+	this->order.reserve(num);
+	this->stack.reserve(num);
 }
 
 
-edge_t Graph::add_edge(vertex_t v_from, vertex_t v_to, gdur_t dur)
+void Graph::clear_all()
 {
+	for (auto& edges : this->edges_in) {
+		edges.clear();
+	}
+
+	for (auto& edges : this->edges_out) {
+		edges.clear();
+	}
+
+	this->next_edge_idx = 0;
+	this->free_edge_idx.clear();
+}
+
+
+edge_t Graph::add_edge(const vertex_t v_from, const vertex_t v_to, const gdur_t dur)
+{
+	assert(v_from != v_to && v_from < this->n_vertex && v_to < this->n_vertex);
 	edge_t edge_idx = this->get_free_edge_idx();
 
 	this->edges_in[v_to].push_back({edge_idx, v_from, dur});
@@ -52,52 +65,111 @@ edge_t Graph::get_free_edge_idx()
 	return edge_idx;
 }
 
-const std::vector<Graph::Path_entry>& Graph::make_path(const vector<vertex_t>& targets,
-	 const std::vector<gtime_t>& lower_bound, const uint8_t* edge_valid)
-{
-	this->clear_path();
-	this->_edge_valid = edge_valid;
 
-	for (vertex_t v : targets) {
-		this->path_rec(v, lower_bound);
+/* Topological sort with cycle detection
+ */
+
+vertex_t Graph::make_order(const vector<vertex_t>& v_start, const uint8_t* edge_valid)
+{
+	this->clear_search();
+	vertex_t ret;
+
+	this->stack.clear();
+
+	for (vertex_t v : v_start) {
+		ret = this->order_rec(v, edge_valid);
+		if (ret < VERTEX_MAX) {
+			return ret;
+		}
 	}
 
-	this->_lower_bound = nullptr;
-	this->_edge_valid = nullptr;
+	this->order.clear();
+	while (!this->stack.empty()) {
+		this->order.push_back(this->stack.back());
+		this->stack.pop_back();
+	}
 
-	return this->path;
+	return VERTEX_MAX;
 }
 
-void Graph::clear_path()
+void Graph::clear_search()
 {
-	for (auto& x : this->path) {
-		x.done = 0;
+	for (auto& x : this->search) {
+		x.state = STATE_WAIT;
 	}
 }
 
 
-void Graph::path_rec(vertex_t v, const std::vector<gtime_t>& lower_bound)
+vertex_t Graph::order_rec(const vertex_t v, const uint8_t* edge_valid)
 {
-	if (this->path[v].done) {
-		return;
+	if (this->search[v].state == STATE_ON_STACK) {
+		return v;
+	}
+	
+	if (this->search[v].state == STATE_DONE) {
+		return VERTEX_MAX;
 	}
 
-	gtime_t new_time = lower_bound[v];
-	this->path[v] = {new_time, EDGE_MAX, VERTEX_MAX, 1};
+	this->search[v].state = STATE_ON_STACK;
 
-	for (auto& edge : this->edges_in[v]) {
-		if (this->_edge_valid == nullptr || this->_edge_valid[edge.idx]) {
-			this->path_rec(edge.vertex, lower_bound);
-			new_time = this->path[edge.vertex].time + edge.dur;
-
-			if (new_time > this->path[v].time) {
-				this->path[v] = {new_time, edge.idx, edge.vertex, 1};
+	vertex_t ret;
+	for (auto& edge : this->edges_out[v]) {
+		if (edge_valid == nullptr || edge_valid[edge.idx]) {
+			vertex_t w = edge.vertex;
+			this->search[w].pred = v;
+			this->search[w].edge = edge.idx;
+			
+			ret = order_rec(w, edge_valid);
+			
+			if (ret < VERTEX_MAX) {
+				break;
 			}
 		}
 	}
+
+	this->stack.push_back(v);
+	this->search[v].state = STATE_DONE;
+
+	return ret;
 }
 
 
+void Graph::make_time(const gtime_t* lower_bound, const uint8_t* edge_valid)
+{
+	this->clear_time();
+
+	vertex_t order_size = this->order.size();
+	
+	for (vertex_t idx = 0; idx < order_size; idx++) {
+		vertex_t v = this->order[idx];
+
+		this->order_idx[v] = idx;
+		this->time[v] = (lower_bound == nullptr) ? 0 : lower_bound[v];
+		
+		for (auto& edge : this->edges_in[v]) {
+			vertex_t u = edge.vertex;
+			if (edge_valid == nullptr || edge_valid[u]) {
+				assert(this->search[edge.vertex].state == STATE_DONE);
+			
+			}
+
+			gtime_t edge_time = this->time[v];
+			if (this->time[v] < edge_time) {
+				this->time[v] = edge_time;
+				this->search[v].pred = u;
+				this->search[v].edge = edge.idx;
+			}
+		}
+
+		this->search[v].state = STATE_DONE;
+	}
+}
 
 
+void Graph::clear_time()
+{
+	for (auto& x : this->search) {
+		x = {STATE_WAIT, 0, VERTEX_MAX, EDGE_MAX};
+	}
+}
 

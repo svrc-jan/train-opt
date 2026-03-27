@@ -38,7 +38,10 @@ public:
 	
 	inline void push_back(const T& x) { *(this->_end++) = x; }
 	Array<T>& operator<<(const T& x) { this->push_back(x); return *this; }
-	
+
+	void copy_from(const Array<T>& other);
+	inline void copy_to(Array<T>& other) const { other.copy_from(*this); }
+
 	
 	inline size_t n_bytes() const { return this->size()*sizeof(T); }
 
@@ -54,6 +57,7 @@ public:
 	template<typename C, typename I>
 	void assign_offset(C& container, I& idx, const bool clear=false);
 };
+
 
 template<typename T>
 Array<T>::Array(void* const ptr, size_t size)
@@ -72,6 +76,7 @@ Array<T>::Array(void* const begin, void* const end)
 	}
 }
 
+
 template<typename T>
 void Array<T>::set_begin(void* const ptr, bool shift_end)
 {
@@ -81,6 +86,17 @@ void Array<T>::set_begin(void* const ptr, bool shift_end)
 	}
 	this->_begin = (T*)ptr;
 }
+
+
+template<typename T>
+void Array<T>::copy_from(const Array<T>& other)
+{
+	this->clear();
+	for (auto& x : other) {
+		this->push_back(x);
+	}
+}
+
 
 template<typename T>
 bool Array<T>::is_asc() const

@@ -467,8 +467,6 @@ void Instance::add_res_name(string res_name)
 }
 
 
-
-
 Instance::Paths::Paths(const Instance& inst)
 {
 	this->ops.resize(inst.n_trains());
@@ -481,10 +479,12 @@ Instance::Paths::Paths(const Instance& inst)
 	}
 }
 
+
 Instance::Paths::~Paths()
 {
 
 }
+
 
 void Instance::Paths::clear()
 {
