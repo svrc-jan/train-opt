@@ -5,7 +5,7 @@
 
 #include "utils/stl_print.hpp"
 #include "instance.hpp"
-#include "path_graph.hpp"
+#include "graph.hpp"
 
 using namespace std;
 
@@ -20,32 +20,19 @@ int main(int argc, char const *argv[])
 
 	Instance inst(file_name);
 	
-	Path_graph path_graph(inst);
-	auto paths = inst.get_random_paths();
+	Graph graph(inst.n_ops());
 
-	for (auto& p : paths) {
-		for (auto x : p) {
-			cout << x << " ";
+	for (auto& op : inst.ops) {
+		for (auto s : op.succ) {
+			graph.add_edge({op.idx, s, op.dur});
 		}
-		cout << endl;
+	}
+
+	vector<Instance::idx_t> first_ops(inst.n_trains());
+
+	for (auto& train : inst.trains) {
+		first_ops[train.idx] = train.op_first;
+	}
 	
-	}
-
-	path_graph.set_all_paths(paths);
-
-	size_t n_edges = 0;
-
-	for (idx_t t1 = 0; t1 < inst.n_trains(); t1++) {
-		for (idx_t t2 = 0; t2 < inst.n_trains(); t2++) {
-			if (t1 == t2) {
-				continue;
-			}
-
-			n_edges += path_graph.group_edges(t1, t2).size();
-		}
-	}
-
-	cout << "edges: " << n_edges << endl;
- 
 	return 0;
 }

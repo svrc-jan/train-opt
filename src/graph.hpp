@@ -1,85 +1,72 @@
 #pragma once
 
-#include <cstdint>
 #include <vector>
-#include <queue>
+#include <cstdint>
+#include <limits>
+#include <ranges>
 
-typedef uint32_t edge_t;
-typedef uint16_t vertex_t;
-typedef uint32_t gtime_t;
-typedef uint16_t gdur_t;
-
-#define EDGE_MAX UINT32_MAX
-#define VERTEX_MAX UINT16_MAX
-#define GTIME_MAX UINT32_MAX
-#define GDUR_MAX UINT16_MAX
-
-
-enum Vertex_state
-{
-	STATE_WAIT,
-	STATE_DONE,
-	STATE_ON_STACK
-};
-
+#include "utils/flag.hpp"
 
 class Graph
 {
+
 public:
 	struct Edge;
-	struct Search_entry;
-	
-	Graph() {}
+
+	typedef uint16_t vtx_t;
+	typedef uint16_t dur_t;
+	typedef uint32_t tim_t;
+
+	static const vtx_t VTX_MAX = std::numeric_limits<vtx_t>::max();
+	static const dur_t DUR_MAX = std::numeric_limits<dur_t>::max();
+	static const tim_t TIM_MAX = std::numeric_limits<tim_t>::max();
+
+	Graph(const size_t n_vtx=0);
 	~Graph() {}
 
-	void set_vertices(const vertex_t num);
-	void clear_all();
-	uint32_t add_edge(const vertex_t v_from, const vertex_t v_to, const gdur_t dur);
+	void set_n_vtx(size_t n_vtx);
 
-	inline size_t deg_out(vertex_t v) const { return this->edges_out[v].size(); } 
-	inline size_t deg_in(vertex_t v) const { return this->edges_in[v].size(); }
-
-	vertex_t make_order(const std::vector<vertex_t>& v_start, const uint8_t* edge_valid=nullptr);
-	void make_time(const gtime_t* lower_bound, const uint8_t* edge_valid=nullptr);
-
-	inline const std::vector<Search_entry>& get_search() const { return this->search; }
-
-
-private:
-	vertex_t n_vertex = 0;
-
-	uint32_t next_edge_idx = 0;
-	std::vector<edge_t> free_edge_idx = {};
-
-	std::vector<std::vector<Edge>> edges_in = {};
-	std::vector<std::vector<Edge>> edges_out = {};
-
-	std::vector<Search_entry> search = {};
-	std::vector<gtime_t> time = {};
-	std::vector<vertex_t> order_idx = {};
-	std::vector<vertex_t> order = {};
-	std::vector<vertex_t> stack = {};
-
-	edge_t get_free_edge_idx();
+	void add_edge(const Edge& e);
+	bool remove_edge(const Edge& e);
+	bool update_edge(const Edge& e, size_t idx);
+	bool update_edge(const Edge& e_old, const Edge& e_new);
 	
-	void clear_search();
-	void clear_time();
-	vertex_t order_rec(const vertex_t v, const uint8_t* edge_valid);
+	bool has_cycle(const std::vector<vtx_t>& start_vtx);
+	bool make_order(const std::vector<vtx_t>& start_vtx);
+	
+private:
+	struct Edge_entry;
+	
+	vtx_t n_vtx = 0;
+	std::vector<std::vector<Edge_entry>> edges = {};
+
+	Flag visited;
+	Flag rec_stack;
+
+	std::vector<vtx_t> order = {};
+	std::vector<tim_t> time_lb = {};
+	std::vector<tim_t> time = {};
+
+	Edge_entry* get_edge_entry(const Edge& e);
+
+	bool has_cycle_rec(vtx_t v);
+	bool make_order_rec(vtx_t v, vtx_t* stack, size_t& stack_size);
+	std::vector<tim_t>& update_time();
 };
 
 
 struct Graph::Edge
 {
-	edge_t idx = EDGE_MAX;
-	vertex_t vertex = VERTEX_MAX;
-	gdur_t dur = 0;
+	vtx_t v_from = VTX_MAX;
+	vtx_t v_to = VTX_MAX;
+	dur_t d = 0;
 };
 
 
-struct Graph::Search_entry
+struct Graph::Edge_entry
 {
-	uint8_t state = STATE_WAIT;
-	uint8_t dirty = 0;
-	vertex_t pred = VERTEX_MAX;
-	edge_t edge = EDGE_MAX;
+	vtx_t v = VTX_MAX;
+	dur_t d = 0;
+
+	Edge_entry(const Edge& e) : v(e.v_to), d(e.d) {}
 };

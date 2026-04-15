@@ -1,175 +1,190 @@
 #include "graph.hpp"
 
-#include <assert.h>
+#include <cassert>
 
 using namespace std;
 
 
-void Graph::set_vertices(const vertex_t num)
+Graph::Graph(const size_t n_vtx)
 {
-	assert(num < VERTEX_MAX && num > 0);
-	this->n_vertex = num;
+	this->set_n_vtx(n_vtx);
+}
 
-	this->edges_in.resize(num, vector<Edge>(0));
-	this->edges_out.resize(num, vector<Edge>(0));
+
+void Graph::set_n_vtx(const size_t n_vtx)
+{
+	assert(n_vtx < VTX_MAX);
+	this->n_vtx = n_vtx;
+
+	this->edges.resize(n_vtx, vector<Edge_entry>(0));
+
+	this->visited.set_n_items(n_vtx);
+	this->rec_stack.set_n_items(n_vtx);
+
+	this->order.reserve(n_vtx);
+
+	this->time_lb.resize(n_vtx, 0);
+	this->time.resize(n_vtx);
+}
+
+
+void Graph::add_edge(const Edge& e)
+{
+	this->edges[e.v_from].push_back(e);
+}
+
+
+bool Graph::remove_edge(const Edge& e)
+{
+	auto entry = this->get_edge_entry(e);
 	
-	this->search.resize(num);
-	this->time.resize(num);
-	this->order_idx.resize(num);
-
-	this->order.reserve(num);
-	this->stack.reserve(num);
-}
-
-
-void Graph::clear_all()
-{
-	for (auto& edges : this->edges_in) {
-		edges.clear();
+	if (entry == nullptr) {
+		return true;
 	}
 
-	for (auto& edges : this->edges_out) {
-		edges.clear();
+	auto& edges_from = this->edges[e.v_from];
+	
+	*entry = edges_from.back();
+	edges_from.pop_back();
+
+	return false;
+}
+
+
+bool Graph::update_edge(const Edge& e, size_t idx)
+{
+	auto& edges_from = this->edges[e.v_from];
+	if (edges_from.size() <= idx) {
+		this->add_edge(e);
+		return true;
 	}
 
-	this->next_edge_idx = 0;
-	this->free_edge_idx.clear();
+	edges_from[idx] = e;
+	return false;
 }
 
 
-edge_t Graph::add_edge(const vertex_t v_from, const vertex_t v_to, const gdur_t dur)
+bool Graph::update_edge(const Edge& e_old, const Edge& e_new)
 {
-	assert(v_from != v_to && v_from < this->n_vertex && v_to < this->n_vertex);
-	edge_t edge_idx = this->get_free_edge_idx();
-
-	this->edges_in[v_to].push_back({edge_idx, v_from, dur});
-	this->edges_out[v_from].push_back({edge_idx, v_from, dur});
-
-	return edge_idx;
-}
-
-
-edge_t Graph::get_free_edge_idx()
-{
-	edge_t edge_idx;
-
-	if (this->free_edge_idx.empty()) {
-		assert(this->next_edge_idx < EDGE_MAX);
-		edge_idx = this->next_edge_idx++;
+	bool ret = false;
+	if (e_old.v_from == e_new.v_from) {
+		auto entry = this->get_edge_entry(e_old);
+		if (entry == nullptr) {
+			this->add_edge(e_new);
+			ret = true;
+		}
+		else{
+			*entry = e_new;
+		}
 	}
 	else {
-		edge_idx = this->free_edge_idx.back();
-		this->free_edge_idx.pop_back();
-	}
-
-	return edge_idx;
-}
-
-
-/* Topological sort with cycle detection
- */
-
-vertex_t Graph::make_order(const vector<vertex_t>& v_start, const uint8_t* edge_valid)
-{
-	this->clear_search();
-	vertex_t ret;
-
-	this->stack.clear();
-
-	for (vertex_t v : v_start) {
-		ret = this->order_rec(v, edge_valid);
-		if (ret < VERTEX_MAX) {
-			return ret;
-		}
-	}
-
-	this->order.clear();
-	while (!this->stack.empty()) {
-		this->order.push_back(this->stack.back());
-		this->stack.pop_back();
-	}
-
-	return VERTEX_MAX;
-}
-
-void Graph::clear_search()
-{
-	for (auto& x : this->search) {
-		x.state = STATE_WAIT;
-	}
-}
-
-
-vertex_t Graph::order_rec(const vertex_t v, const uint8_t* edge_valid)
-{
-	if (this->search[v].state == STATE_ON_STACK) {
-		return v;
+		ret = this->remove_edge(e_old);
+		this->add_edge(e_new);
 	}
 	
-	if (this->search[v].state == STATE_DONE) {
-		return VERTEX_MAX;
-	}
-
-	this->search[v].state = STATE_ON_STACK;
-
-	vertex_t ret;
-	for (auto& edge : this->edges_out[v]) {
-		if (edge_valid == nullptr || edge_valid[edge.idx]) {
-			vertex_t w = edge.vertex;
-			this->search[w].pred = v;
-			this->search[w].edge = edge.idx;
-			
-			ret = order_rec(w, edge_valid);
-			
-			if (ret < VERTEX_MAX) {
-				break;
-			}
-		}
-	}
-
-	this->stack.push_back(v);
-	this->search[v].state = STATE_DONE;
-
 	return ret;
 }
 
 
-void Graph::make_time(const gtime_t* lower_bound, const uint8_t* edge_valid)
+Graph::Edge_entry* Graph::get_edge_entry(const Edge& e)
 {
-	this->clear_time();
+	if (e.v_from == VTX_MAX || e.v_from == VTX_MAX) {
+		return nullptr;
+	}
 
-	vertex_t order_size = this->order.size();
-	
-	for (vertex_t idx = 0; idx < order_size; idx++) {
-		vertex_t v = this->order[idx];
-
-		this->order_idx[v] = idx;
-		this->time[v] = (lower_bound == nullptr) ? 0 : lower_bound[v];
-		
-		for (auto& edge : this->edges_in[v]) {
-			vertex_t u = edge.vertex;
-			if (edge_valid == nullptr || edge_valid[u]) {
-				assert(this->search[edge.vertex].state == STATE_DONE);
-			
-			}
-
-			gtime_t edge_time = this->time[v];
-			if (this->time[v] < edge_time) {
-				this->time[v] = edge_time;
-				this->search[v].pred = u;
-				this->search[v].edge = edge.idx;
-			}
+	for (auto& entry : this->edges[e.v_from] | views::reverse) {
+		if (entry.v == e.v_to) {
+			return &entry;
 		}
-
-		this->search[v].state = STATE_DONE;
 	}
+
+	return nullptr;
 }
 
 
-void Graph::clear_time()
+bool Graph::has_cycle(const std::vector<vtx_t>& start_vtx)
 {
-	for (auto& x : this->search) {
-		x = {STATE_WAIT, 0, VERTEX_MAX, EDGE_MAX};
+	this->visited.clear();
+	this->rec_stack.clear();
+
+	for (vtx_t v : start_vtx) {
+		if (this->has_cycle_rec(v)) {
+			return true;
+		}
 	}
+
+	return false;
 }
 
+
+bool Graph::has_cycle_rec(vtx_t v)
+{
+	if (this->rec_stack[v]) {
+		return true;
+	}
+
+	if (this->visited[v]) {
+		return false;
+	}
+
+	this->visited += v;
+	this->rec_stack += v;
+
+	for (const auto& e : this->edges[v]) {
+		if (has_cycle_rec(e.v)) {
+			return true;
+		}
+	}
+
+	this->rec_stack -= v;
+	return false;
+}
+
+
+bool Graph::make_order(const std::vector<vtx_t>& start_vtx)
+{
+	this->visited.clear();
+	this->rec_stack.clear();
+
+	size_t stack_size = 0;
+	vtx_t stack[this->n_vtx];
+
+	for (vtx_t v : start_vtx) {
+		if (this->make_order_rec(v, stack, stack_size)) {
+			return true;
+		}
+	}
+
+	this->order.clear();
+	while (stack_size > 0) {
+		this->order.push_back(stack[--stack_size]);
+	}
+
+	return false;
+}
+
+
+bool Graph::make_order_rec(vtx_t v, vtx_t* stack, size_t& stack_size)
+{
+	if (this->rec_stack[v]) {
+		return true;
+	}
+
+	if (this->visited[v]) {
+		return false;
+	}
+
+	this->visited += v;
+	this->rec_stack += v;
+
+	for (const auto& e : this->edges[v] | views::reverse) {
+		if (make_order_rec(e.v, stack, stack_size)) {
+			return true;
+		}
+	}
+
+	stack[stack_size++] = v;
+	this->rec_stack -= v;
+
+	return false;
+}
