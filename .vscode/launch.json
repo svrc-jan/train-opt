@@ -5,9 +5,9 @@
 			"type": "cppdbg",
 			"request": "launch",
 
-			"preLaunchTask": "CMake: Build current Debug",
+			"preLaunchTask": "CMake: current Debug",
 
-			"program": "${workspaceFolder}/build/${fileBasenameNoExtension}_Debug",
+			"program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
 			"args": [
 				"${input:instance}"
 			],

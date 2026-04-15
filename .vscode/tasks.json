@@ -1,25 +1,45 @@
 {
 	"tasks": [
 		{
-			"label": "CMake: Build current Release",
+			"label": "CMake: current Release",
 			"type": "shell",
-			"command": "cmake --build . --target ${fileBasenameNoExtension} --config Release -j 8",
+			"command": "echo 'Builing ${fileBasenameNoExtension} Release'",
 			"dependsOn": [
-				"CMake: Configure"
+				"CMake: Configure Release",
+				"CMake: Build current"
 			],
 			"group": {
 				"kind": "build",
-				"isDefault": "${workspaceFolder}/apps/*.cpp"
+				"isDefault": true
 			}
 		},
 		{
-			"label": "CMake: Build current Debug",
+			"label": "CMake: current Debug",
 			"type": "shell",
-			"command": "cmake --build . --target ${fileBasenameNoExtension} --config Debug -j 8",
+			"command": "echo 'Builing ${fileBasenameNoExtension} Debug'",
 			"dependsOn": [
-				"CMake: Configure"
+				"CMake: Configure Debug",
+				"CMake: Build current"
 			],
 			"group": "build"
+		},
+		{
+			"label": "CMake: current Profiling",
+			"type": "shell",
+			"command": "echo 'Builing ${fileBasenameNoExtension} Profiling'",
+			"dependsOn": [
+				"CMake: Configure Profiling",
+				"CMake: Build current"
+			],
+			"group": "build"
+		},
+		{
+			"label": "CMake: Build current",
+			"type": "shell",
+			"command": "cmake --build . --target ${fileBasenameNoExtension} -j 8",
+			"group": {
+				"kind": "build",
+			}
 		},
 		{
 			"label": "CMake: Build clean",
@@ -28,9 +48,21 @@
 			"group": "build"
 		},
 		{
-			"label": "CMake: Configure",
+			"label": "CMake: Configure Debug",
 			"type": "shell",
-			"command": "cmake .",
+			"command": "cmake . -DCMAKE_BUILD_TYPE=Debug",
+			"group": "build"
+		},
+		{
+			"label": "CMake: Configure Release",
+			"type": "shell",
+			"command": "cmake . -DCMAKE_BUILD_TYPE=Release",
+			"group": "build"
+		},
+		{
+			"label": "CMake: Configure Profiling",
+			"type": "shell",
+			"command": "cmake . -DCMAKE_BUILD_TYPE=Profiling",
 			"group": "build"
 		}
 	],

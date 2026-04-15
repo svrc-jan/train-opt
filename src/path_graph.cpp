@@ -1,5 +1,6 @@
 #include "path_graph.hpp"
 
+#include <iostream>
 
 using namespace std;
 
@@ -93,11 +94,67 @@ vector<Path_graph::Alt_edges> Path_graph::group_edges(const idx_t t1, const idx_
 		}
 			
 		for (int i = ru2_mp[r].start; i < ru2_mp[r].end; i++) {
-			auto& x2 = ru1[i];
+			auto& x2 = ru2[i];
 
 			edges.push_back({x1.vtx, x2.vtx});
 		}
 	}
+
+	vector<size_t> group_end = {};
+	size_t n_edges = edges.size();
+
+	size_t i = 0;
+	size_t j = 0;
+
+
+	while (j < n_edges) {
+		j++;
+		while (i < j) {
+			auto& e1 = edges[i];
+		
+			for (size_t k = j; k < n_edges; k++) {
+				auto& e2 = edges[k];
+				/* e1: t1 -> t2
+				* e1.first.end -> e1.second.start
+				*
+				* e2: t1 <- t2
+				* e2.first.start <- e2.second.end
+				*
+				* 
+				* e2: t1 -> t2
+				* e2.first.end -> e2.second.start
+				* 
+				* e1: t1 <- t2
+				* e1.first.start <- e1.second.end
+				*/
+
+				bool creates_cycle = 
+					((e2.first.start <= e1.first.end) && (e1.second.start <= e2.second.end)) ||
+					((e1.first.start <= e2.first.end) && (e2.second.start <= e1.second.end));
+
+				if (creates_cycle) {
+					auto tmp = e2;
+					for (size_t l = k; l > j; l--) {
+						edges[l] = edges[l - 1];
+					}
+					edges[j] = tmp;
+					j++;
+				}
+			}
+			i++;
+		}
+
+		group_end.push_back(j);
+	}
+	
+
+	size_t group_start = 0;
+	for (size_t x : group_end) {
+		cout << " " << x - group_start;
+		group_start = x;
+	}
+
+	cout << endl;
 
 	return edges;
 }

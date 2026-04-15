@@ -174,13 +174,13 @@ inline Instance::Paths Instance::get_empty_paths() const
 
 inline bool Instance::Op::is_leading() const
 {
-	return (this->pred.empty() == 0) && (this->res.empty() == 0);
+	return this->pred.empty() && this->res.empty();
 }
 
 
 inline bool Instance::Op::is_trailing() const
 {
-	return (this->succ.empty() == 0) && (this->res.empty() == 0);
+	return this->succ.empty() && this->res.empty();
 }
 
 
