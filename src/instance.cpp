@@ -5,7 +5,6 @@
 #include <set>
 #include <queue>
 
-#include "utils/optim_defs.h"
 #include "utils/files.hpp"
 
 using namespace std;
@@ -341,10 +340,9 @@ void Instance::propagate_upper_bounds()
 
 void Instance::set_max_bound()
 {
-	queue<idx_t> qs[OMP_NUM_THR];
+	queue<idx_t> q;
 
 	vector<idx_t> n_out(this->n_ops());
-	OMP_STATIC
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		n_out[o] = this->ops[o].succ.size();
 	}
@@ -357,10 +355,7 @@ void Instance::set_max_bound()
 
 	idx_t path_idx = 0;
 
-	OMP_DYNAMIC
 	for (size_t t = 0; t < this->n_trains(); t++) {
-		auto& q = qs[OMP_THR_ID];
-
 		auto& train = this->trains[t];
 
 		idx_t o_last = train.op_last(); 
@@ -395,7 +390,6 @@ void Instance::set_max_bound()
 
 	tim_t max_bound = 0;
 
-	OMP_STATIC
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		auto& op = this->ops[o];
 
@@ -403,9 +397,8 @@ void Instance::set_max_bound()
 		max_bound = max(max_bound, op_bound);
 	}
 
-	OMP_STATIC
 	for (auto& op : this->ops) {
-		if (op.start_ub == TIME_MAX) {
+		if (op.start_ub == TIM_MAX) {
 			op.start_ub = max_bound;
 		}
 	}
@@ -414,8 +407,6 @@ void Instance::set_max_bound()
 
 void Instance::set_leading_trailing()
 {
-	
-	OMP_STATIC_SMALL
 	for (auto& train : this->trains) {
 		auto& op_first = this->ops[train.op_first];
 		auto& op_last = this->ops[train.op_last()];
@@ -430,8 +421,6 @@ Instance::Paths Instance::get_random_paths() const
 {
 	Paths paths = this->get_empty_paths();
 
-	
-	OMP_DYNAMIC
 	for (auto& train : this->trains) {
 		auto& path = paths.ops[train.idx];
 
@@ -472,7 +461,6 @@ Instance::Paths::Paths(const Instance& inst)
 	this->ops.resize(inst.n_trains());
 	this->data.resize(inst.max_paths_len);
 
-	OMP_STATIC_SMALL
 	for (size_t t = 0; t < inst.n_trains(); t++) {
 		this->ops[t].set_begin(this->data.data() + inst.trains[t].path_idx);
 		this->ops[t].clear();

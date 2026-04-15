@@ -1,5 +1,7 @@
 #pragma once
+
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 #include <map>
@@ -12,14 +14,6 @@
 
 using json = nlohmann::json;
 
-#define IDX_MAX UINT16_MAX
-#define TIME_MAX UINT32_MAX
-#define DUR_MAX UINT16_MAX
-
-typedef uint16_t idx_t;
-typedef uint32_t tim_t;
-typedef uint16_t dur_t;
-
 
 class Instance
 {
@@ -29,6 +23,14 @@ public:
 	struct Train;
 	struct Obj;
 	class Paths;
+
+	typedef uint16_t idx_t;
+	typedef uint32_t tim_t;
+	typedef uint16_t dur_t;
+
+	static const idx_t IDX_MAX = std::numeric_limits<idx_t>::max();
+	static const dur_t DUR_MAX = std::numeric_limits<dur_t>::max();
+	static const tim_t TIM_MAX = std::numeric_limits<tim_t>::max();
 
 	Array<Train> trains;
 	Array<Op> ops;
@@ -109,7 +111,7 @@ struct Instance::Op
 	dur_t dur = 0;
 
 	tim_t start_lb = 0;
-	tim_t start_ub = TIME_MAX;
+	tim_t start_ub = TIM_MAX;
 
 	Array<idx_t> succ;
 	Array<idx_t> pred;

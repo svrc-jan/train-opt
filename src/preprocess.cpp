@@ -2,7 +2,6 @@
 
 #include <cstdio>
 #include <iostream>
-#include "utils/optim_defs.h"
 #include "utils/disjoint_set.hpp"
 #include "utils/stl_print.hpp"
 
@@ -28,7 +27,6 @@ void Preprocess::make_junctions()
 
 	int junct_idx = 0;
 
-	OMP_DYNAMIC
 	for (size_t t = 0; t < n_trains; t++) {
 
 		auto& inst_train = this->inst.trains[t];
@@ -75,8 +73,6 @@ void Preprocess::make_junctions()
 		junct_idx += train.juncts.size();
 	}
 
-
-	OMP_STATIC
 	for (auto& op : this->inst.ops) {
 		auto& j_op = this->op_junct[op.idx];
 		
@@ -105,7 +101,6 @@ void Preprocess::make_junctions()
 
 	this->juncts.resize(junct_idx, Junction());
 
-	OMP_STATIC
 	for (auto& op : this->inst.ops) {
 		auto& j_op = this->op_junct[op.idx];
 
@@ -128,13 +123,11 @@ void Preprocess::make_junctions()
 	size_t succ_idx = 0;
 	size_t pred_idx = 0;
 
-	OMP_STATIC
 	for (auto& junct : this->juncts) {
 		junct.succ.assign_offset(this->junct_succ, succ_idx, true);
 		junct.pred.assign_offset(this->junct_pred, pred_idx, true);
 	}
 
-	OMP_STATIC
 	for (auto& op : this->inst.ops) {
 		if (op.is_leading() || op.is_trailing()) {
 			continue;
@@ -150,7 +143,6 @@ void Preprocess::make_junctions()
 
 void Preprocess::make_junctions_bounds()
 {
-	OMP_STATIC_SMALL
 	for (auto& inst_train : this->inst.trains) {
 		auto& train = this->trains[inst_train.idx];
 
@@ -166,7 +158,6 @@ void Preprocess::make_junctions_bounds()
 		}
 	}
 
-	OMP_STATIC
 	for (auto& junct : this->juncts) {
 		if (!junct.succ.empty()) {
 			junct.time_lb = UINT32_MAX;
@@ -174,8 +165,8 @@ void Preprocess::make_junctions_bounds()
 
 			for (auto& succ : junct.succ) {
 				auto& op = this->inst.ops[succ.op];
-				junct.time_lb = min(junct.time_lb, op.start_lb);
-				junct.time_ub = max(junct.time_ub, op.start_ub);
+				junct.time_lb = MIN(junct.time_lb, op.start_lb);
+				junct.time_ub = MAX(junct.time_ub, op.start_ub);
 			}
 		}
 	}
