@@ -16,7 +16,7 @@ void Graph::set_n_vtx(const size_t n_vtx)
 	assert(n_vtx < VTX_MAX);
 	this->n_vtx = n_vtx;
 
-	this->edges.resize(n_vtx, vector<Edge_entry>(0));
+	this->edges.resize(n_vtx, {});
 
 	this->visited.set_n_items(n_vtx);
 	this->rec_stack.set_n_items(n_vtx);

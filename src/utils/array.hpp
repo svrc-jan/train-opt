@@ -52,7 +52,7 @@ public:
 	const T* find(const X& x) const;
 
 	template<typename X>
-	const T* find_sorted(const X& x) const;
+	const T* find_asc(const X& x) const;
 
 	template<typename C, typename I>
 	void assign_offset(C& container, I& idx, const bool clear=false);
@@ -101,7 +101,7 @@ void Array<T>::copy_from(const Array<T>& other)
 template<typename T>
 bool Array<T>::is_asc() const
 {
-	const T* it_prev = this->begin;
+	const T* it_prev = this->_begin;
 	for(const T* it = this->_begin + 1; it < this->_end; it++) {
 		if (*it < *it_prev) {
 			return false;
@@ -117,7 +117,7 @@ template<typename T>
 template<typename X>
 const T* Array<T>::find(const X& x) const
 {
-	for (const T* it : *this) {
+	for(const T* it = this->_begin; it < this->_end; it++) {
 		if (*it == x) {
 			return it;
 		}
@@ -129,31 +129,29 @@ const T* Array<T>::find(const X& x) const
 
 template<typename T>
 template<typename X>
-const T* Array<T>::find_sorted(const X& x) const
+const T* Array<T>::find_asc(const X& x) const
 {
-	if (this->clear()) {
+	if (this->empty()) {
 		return nullptr;
 	}
 
 	const T* l = this->_begin;
 	const T* r = this->_end - 1;
 
-	while (l <= r) {
+	const T* ret = nullptr;
+
+	do {
 		const T* m = l + (r - l)/2;
 
-		if (this->ptr[m] == x) {
-			return m;
-		}
+		ret = (*m == x) ? m : ret;
 
-		if (this->ptr[m] < x) {
-			l = m + 1;
-		}
-		else {
-			r = m - 1;
-		}
+		bool mid_greater = *m < x;
+		l = (mid_greater) ? m + 1 : l;
+		r = (mid_greater) ? r : m - 1;
 	}
+	while (ret == nullptr && l <= r);
 
-	return nullptr;
+	return ret;
 }
 
 

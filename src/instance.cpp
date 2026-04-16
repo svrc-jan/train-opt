@@ -5,22 +5,23 @@
 #include <set>
 #include <queue>
 
-#include "utils/files.hpp"
-
 using namespace std;
 
 Instance::Instance(const string& file_name) 
 {
-	json inst_jsn = get_json_file(file_name);
+	json inst_jsn = get_json_from_file(file_name);
 
 	this->prepare(inst_jsn);
 	this->parse(inst_jsn);
 	this->assign_arrays();
 	this->assign_pred_ops();
-	this->set_leading_trailing();
-	this->propagate_lower_bounds();
-	this->set_max_bound();
-	this->propagate_upper_bounds();
+	// this->set_leading_trailing();
+	// this->propagate_lower_bounds();
+	// this->set_max_bound();
+	// this->propagate_upper_bounds();
+
+	this->verify_json(inst_jsn);
+	this->verify_pred();
 }
 
 
@@ -32,7 +33,7 @@ Instance::~Instance()
 }
 
 
-void Instance::prepare(json inst_jsn)
+void Instance::prepare(const json& inst_jsn)
 {
 	this->trains.clear();
 	this->ops.clear();
@@ -40,7 +41,8 @@ void Instance::prepare(json inst_jsn)
 	this->op_succ.clear();
 
 	set<idx_t> res_set;
-	int n_res_dups = 0;
+	size_t n_res_dups = 0;
+
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		this->trains.increment_size(1);
@@ -52,25 +54,22 @@ void Instance::prepare(json inst_jsn)
 			if (op_jsn.contains("resources")) {
 				res_set.clear();
 				for (const auto& res_jsn : op_jsn["resources"]) {
-					this->add_res_name(res_jsn["resource"]);
-
-					int res_idx = this->res_name_to_idx[res_jsn["resource"]];
-
-					if (res_set.find(res_idx) != res_set.end()) {
-						n_res_dups += 1;
-						continue;
+					string res_name = res_jsn["resource"];
+					idx_t res_idx = this->add_res_name(res_name);
+					
+					auto ret = res_set.insert(res_idx);
+					if (ret.second) {					
+						this->op_res.increment_size(1);
 					}
-
-					res_set.insert(res_idx);
-					this->op_res.increment_size(1);
+					else {
+						n_res_dups += 1;
+					}
 				}
 			}
 		}
 	}
 
-	// if (n_res_dups > 0) {
-	// 	cout << "res doups: " << n_res_dups;
-	// }
+	assert(this->n_ops() < IDX_MAX);
 
 	this->objs.set_size(inst_jsn["objective"].size());
 	this->op_pred.set_size(this->op_succ.size());
@@ -97,14 +96,14 @@ void Instance::prepare(json inst_jsn)
 }
 
 
-void Instance::parse(json inst_jsn)
+void Instance::parse(const json& inst_jsn)
 {
 	this->trains.clear();
 	this->ops.clear();
 	this->op_res.clear();
 	this->op_succ.clear();
 
-	set<idx_t> res_set;
+	vector<Res> res_vec;
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		Train train;
@@ -118,55 +117,42 @@ void Instance::parse(json inst_jsn)
 			op.train = this->n_trains();
 			op.dur = op_jsn["min_duration"];
 			
-			if (op_jsn.contains("start_lb")) {
-				op.start_lb = op_jsn["start_lb"];
-			}
-
-			if (op_jsn.contains("start_ub")) {
-				op.start_ub = op_jsn["start_ub"];
-			}
+			json_update(op.start_lb, "start_lb", op_jsn);
+			json_update(op.start_ub, "start_ub", op_jsn);
 
 			op.succ.clear();
-			for (int s : op_jsn["successors"]) {
+			for (idx_t s : op_jsn["successors"]) {
 				op.succ.increment_size(1);
 				this->op_succ.push_back(s + train.op_first);
 			}
 
 			op.res.clear();
 			if (op_jsn.contains("resources")) {
-				res_set.clear();
+				res_vec.clear();
 
 				for (const auto& res_jsn : op_jsn["resources"]) {
-					Res res;
+					idx_t res_idx = this->get_res_idx(res_jsn["resource"]);
+					assert(res_idx < this->n_res());
 
-					res.idx = this->res_name_to_idx[res_jsn["resource"]];
-					if (res_jsn.contains("release_time")) {
-						res.time = res_jsn["release_time"];
-					}
+					dur_t res_time = 0;
+					json_update(res_time, "release_time", res_jsn);
 
-					if (res_set.find(res.idx) != res_set.end()) {
-						bool res_found = false;
-						for (size_t i = 0; i < res_set.size(); i++) {
-							Res res_find = this->op_res[this->op_res.size() - i - 1];
-							if (res_find.idx == res.idx) {
-								res_find.time = max(res_find.time, res.time);
-								res_found = true;
-								break;
-							}
-						}
-						assert(res_found);	
+					res_vec.push_back({res_idx, res_time});
+				}
+
+				sort(res_vec.begin(), res_vec.end());
+					
+				for (auto& x : res_vec) {
+					if (op.res.empty() || this->op_res.back().idx != x.idx) {
+						op.res.increment_size(1);
+						this->op_res.push_back(x);
 					}
 					else {
-						res_set.insert(res.idx);
-
-						op.res.increment_size(1);
-						this->op_res.push_back(res);
+						dur_t& res_time = this->op_res.back().time;
+						res_time = MAX(res_time, x.time);
 					}
-					
 				}
 			}
-
-			// assert(op.succ.size > 0 || op.res.size == 0);
 
 			train.ops.increment_size(1);
 			this->ops.push_back(op);
@@ -181,22 +167,17 @@ void Instance::parse(json inst_jsn)
 		assert(obj_jsn["type"] == "op_delay");
 
 		Obj obj;
-		int train_i = obj_jsn["train"];
-		int op_i = obj_jsn["operation"];
+		size_t train_i = obj_jsn["train"];
+		size_t op_i = obj_jsn["operation"];
 
-		obj.op = this->trains[train_i].op_first + op_i;
-		
-		if (obj_jsn.contains("threshold")) {
-			obj.threshold = obj_jsn["threshold"];
-		}
+		assert(train_i < this->n_trains());
+		auto& train = this->trains[train_i];
+		assert(op_i < train.n_ops());
 
-		if (obj_jsn.contains("coeff")) {
-			obj.coeff = obj_jsn["coeff"];
-		}
-
-		if (obj_jsn.contains("increment")) {
-			obj.increment = obj_jsn["increment"];
-		}
+		obj.op = train.op_first + op_i;
+		json_update(obj.threshold, "threshold", obj_jsn);
+		json_update(obj.coeff,     "coeff",     obj_jsn);
+		json_update(obj.increment, "increment", obj_jsn);
 
 		if (obj.coeff == 0 && obj.increment == 0) {
 			continue;
@@ -208,7 +189,100 @@ void Instance::parse(json inst_jsn)
 	for (size_t i = 0; i < this->objs.size(); i++) {
 		this->ops[this->objs[i].op].obj = i;
 	}
+}
 
+
+void Instance::verify_json(const json& inst_jsn) const
+{
+	set<idx_t> res_set;
+
+	idx_t t = 0;
+	idx_t o = 0;
+
+	for (const json& train_jsn : inst_jsn["trains"]) {
+		auto& train = this->trains[t];
+		assert(train.idx == t && train.op_first == o);
+
+		for (const json& op_jsn : train_jsn) {
+			auto& op = this->ops[o];
+			assert(op.idx == o && op.train == t);
+
+			assert(op.dur == op_jsn["min_duration"]);
+			
+			tim_t start_lb = 0;
+			json_update(start_lb, "start_lb", op_jsn);
+			assert(op.start_lb == start_lb);
+
+			tim_t start_ub = TIM_MAX;
+			json_update(start_ub, "start_ub", op_jsn);
+			assert(op.start_ub == start_ub);
+
+			assert(op.n_succ() == op_jsn["successors"].size());
+			idx_t i = 0;
+			for (idx_t s : op_jsn["successors"]) {
+				assert(op.succ[i++] == s + train.op_first);
+			}
+
+			assert(op.succ.is_asc());
+
+			if (op_jsn.contains("resources")) {
+				res_set.clear();
+				for (const auto& res_jsn : op_jsn["resources"]) {
+					const string res_name = res_jsn["resource"];
+
+					idx_t res_idx = this->get_res_idx(res_name);
+					assert(res_idx != IDX_MAX);
+
+					dur_t res_time = 0;
+					json_update(res_time, "release_time", res_jsn);
+					
+					auto find_ptr = op.res.find_asc(res_idx);
+					assert(find_ptr != nullptr && find_ptr->time == res_time);
+
+					res_set.insert(res_idx);
+				}
+				assert(op.res.size() == res_set.size());
+			}
+			else {
+				assert(op.res.size() == 0);
+			}
+			
+			o++;
+		}
+
+		assert(train.op_after() == o);
+		t++;
+	}
+
+	for (auto& op : this->ops) {
+		assert(op.obj == IDX_MAX || this->objs[op.obj].op == op.idx);
+	}
+
+	size_t k = 0;
+	for (const json& obj_jsn : inst_jsn["objective"]) {
+		tim_t threshold = 0;
+		uint8_t coeff = 0;
+		uint8_t increment = 0;
+
+		json_update(threshold, "threshold", obj_jsn);
+		json_update(coeff,     "coeff",     obj_jsn);
+		json_update(increment, "increment", obj_jsn);
+
+		if (coeff == 0 && increment == 0) {
+			continue;
+		}
+
+		auto& obj = this->objs[k];
+
+		idx_t train_i = obj_jsn["train"];
+		idx_t op_i = obj_jsn["operation"];
+		idx_t o = this->trains[train_i].op_first + op_i;
+		
+		assert(this->ops[o].obj == k);
+		assert(obj.threshold == threshold && obj.coeff == coeff && obj.increment == increment);
+
+		k++;
+	}
 }
 
 void Instance::assign_arrays()
@@ -250,6 +324,19 @@ void Instance::assign_pred_ops()
 	for (size_t o = 0; o < this->n_ops(); o++) {
 		for (idx_t s : this->ops[o].succ) {
 			this->ops[s].pred.push_back(o);
+		}
+	}
+}
+
+
+void Instance::verify_pred()
+{
+	for (const Op& op : this->ops) {
+		for (auto& s : op.succ) {
+			assert(this->ops[s].pred.find_asc(op.idx) != nullptr);
+		}
+		for (auto& p : op.pred) {
+			assert(this->ops[p].succ.find_asc(op.idx) != nullptr);
 		}
 	}
 }
@@ -448,11 +535,29 @@ Instance::Paths Instance::get_random_paths() const
 }
 
 
-void Instance::add_res_name(string res_name)
+Instance::idx_t Instance::add_res_name(const std::string& res_name)
 {
-	if (this->res_name_to_idx.find(res_name) == this->res_name_to_idx.end()) {
-		this->res_name_to_idx[res_name] = this->n_res();
+	idx_t res_idx = get_res_idx(res_name);
+
+	if (res_idx == IDX_MAX) {
+		res_idx = this->n_res();
+		assert(res_idx < IDX_MAX);
+
+		this->res_name_to_idx[res_name] = res_idx;
 	}
+
+	return res_idx;
+}
+
+
+Instance::idx_t Instance::get_res_idx(const std::string& res_name) const
+{
+	auto& mp = this->res_name_to_idx; 
+
+	auto it = mp.find(res_name);
+	idx_t idx = (it == mp.end()) ? IDX_MAX : it->second;
+
+	return idx;
 }
 
 

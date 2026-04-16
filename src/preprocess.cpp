@@ -13,9 +13,9 @@ Preprocess::Preprocess(const Instance& inst) : inst(inst)
 {
 	this->trains.resize(this->inst.n_trains(), Train());
 	this->make_junctions();
-	this->make_junctions_bounds();
 	this->make_levels();
 }
+
 
 void Preprocess::make_junctions()
 {

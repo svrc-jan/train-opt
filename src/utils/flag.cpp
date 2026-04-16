@@ -9,7 +9,7 @@ using namespace std;
 
 Flag::Flag(const size_t n_items)
 {
-	this->set_n_items(0);
+	this->set_n_items(n_items);
 }
 
 
@@ -84,7 +84,7 @@ void Flag::alloc_data(const size_t n_items)
 	}
 
 	if (this->data == nullptr) {
-		throw std::bad_alloc();
+		abort();
 	}
 
 	for (size_t i = this->size; i < new_size; i++) {

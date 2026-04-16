@@ -7,7 +7,7 @@
 
 			"preLaunchTask": "CMake: current Debug",
 
-			"program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+			"program": "${workspaceFolder}/build/debug/${fileBasenameNoExtension}",
 			"args": [
 				"${input:instance}"
 			],

@@ -7,12 +7,11 @@
 #include <map>
 #include <ranges>
 
-#include <nlohmann/json.hpp>
 
+#include "utils/json_aux.hpp"
 #include "utils/macros.hpp"
 #include "utils/array.hpp"
 
-using json = nlohmann::json;
 
 
 class Instance
@@ -48,9 +47,6 @@ public:
 	METHOD_N(op_res)
 	inline size_t n_res() const { return this->res_name_to_idx.size(); }
 
-	inline auto ops_range() const { return std::views::iota(0U, this->n_ops()); }
-	inline auto trains_range() const { return std::views::iota(0U, this->n_trains()); }
-
 	inline Paths get_empty_paths() const;
 	Paths get_random_paths() const;
 
@@ -61,10 +57,10 @@ private:
 	Array<uint16_t> op_succ;
 	Array<uint16_t> op_pred;
 
-	std::map<std::string, uint16_t> res_name_to_idx = {};
+	std::map<std::string, idx_t> res_name_to_idx = {};
 
-	void prepare(json inst_jsn);
-	void parse(json inst_jsn);
+	void prepare(const json& inst_jsn);
+	void parse(const json& inst_jsn);
 	void assign_arrays();
 	void assign_pred_ops();
 	
@@ -73,7 +69,11 @@ private:
 	void set_max_bound();
 	void set_leading_trailing();
 
-	void add_res_name(std::string res_name);
+	void verify_json(const json& inst_jsn) const;
+	void verify_pred();
+
+	idx_t add_res_name(const std::string& res_name);
+	idx_t get_res_idx(const std::string& res_name) const;
 };
 
 
@@ -85,8 +85,8 @@ struct Instance::Res
 	bool operator<(const Res& other) const { return this->idx < other.idx; }
 	bool operator==(const Res& other) const { return this->idx == other.idx; }
 
-	bool operator<(int other) const { return this->idx < other; }
-	bool operator==(int other) const { return this->idx == other; }
+	bool operator<(idx_t other) const { return this->idx < other; }
+	bool operator==(idx_t other) const { return this->idx == other; }
 };
 
 

@@ -2,8 +2,6 @@
 
 #include <iostream>
 
-#include "utils/stl_print.hpp"
-#include "instance.hpp"
 #include "preprocess.hpp"
 
 using namespace std;
@@ -15,8 +13,8 @@ int main(int argc, char const *argv[])
 			continue;
 		}
 
+		cout << entry.path() << endl;
 		Instance inst(entry.path());
-		Preprocess prepr(inst);
 	}
 
 
