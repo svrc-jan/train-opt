@@ -8,15 +8,33 @@ using namespace std;
 
 int main(int argc, char const *argv[])
 {
-	for (const auto& entry : filesystem::directory_iterator("data/")) {
-		if (entry.is_directory()) {
-			continue;
+	if (argc == 1 || strlen(argv[1]) == 0) {
+		vector<string> entries = {};
+
+		for (const auto& entry : filesystem::directory_iterator("data/")) {
+			if (entry.is_directory()) {
+				continue;
+			}
+
+			entries.push_back(entry.path());
 		}
 
-		cout << entry.path() << endl;
-		Instance inst(entry.path());
+		sort(entries.begin(), entries.end());
+
+		for (const auto& entry : entries) {
+			cout << entry << endl;
+			Instance inst(entry);
+			Preprocess prepr(inst, true);
+		}
 	}
+	else {
+		Instance inst(argv[1]);
+		Preprocess prepr(inst);
 
-
+		// for (auto& level : prepr.levels) {
+		// 	cout << level.train << "." << level.idx << " - req: " << level.req_res << ", opt: " << level.opt_res << endl;
+		// }
+	}
+	
 	return 0;
 }

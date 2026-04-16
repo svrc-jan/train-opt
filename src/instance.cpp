@@ -7,7 +7,7 @@
 
 using namespace std;
 
-Instance::Instance(const string& file_name) 
+Instance::Instance(const string& file_name, const bool verify)
 {
 	json inst_jsn = get_json_from_file(file_name);
 
@@ -20,8 +20,10 @@ Instance::Instance(const string& file_name)
 	// this->set_max_bound();
 	// this->propagate_upper_bounds();
 
-	this->verify_json(inst_jsn);
-	this->verify_pred();
+	if (verify) {
+		this->verify_json(inst_jsn);
+		this->verify_pred();
+	}
 }
 
 
@@ -186,7 +188,7 @@ void Instance::parse(const json& inst_jsn)
 		this->objs.push_back(obj);
 	}
 
-	for (size_t i = 0; i < this->objs.size(); i++) {
+	for (auto i : this->objs_range()) {
 		this->ops[this->objs[i].op].obj = i;
 	}
 }
@@ -321,9 +323,9 @@ void Instance::assign_pred_ops()
 	}
 	assert(idx == this->n_op_pred());
 
-	for (size_t o = 0; o < this->n_ops(); o++) {
-		for (idx_t s : this->ops[o].succ) {
-			this->ops[s].pred.push_back(o);
+	for (auto& op : this->ops) {
+		for (idx_t s : op.succ) {
+			this->ops[s].pred.push_back(op.idx);
 		}
 	}
 }
@@ -347,12 +349,11 @@ void Instance::propagate_lower_bounds()
 	queue<idx_t> q;
 
 	vector<idx_t> n_in(this->n_ops());
-	for (size_t o = 0; o < this->n_ops(); o++) {
+	for (auto o : this->ops_range()) {
 		n_in[o] = this->ops[o].pred.size();
 	}
 
-	for (size_t t = 0; t < this->n_trains(); t++) {
-		auto& train = this->trains[t];
+	for (auto& train : this->trains) {
 		q.push(train.op_first);
 
 		while (!q.empty()) {
@@ -389,13 +390,11 @@ void Instance::propagate_upper_bounds()
 
 	vector<idx_t> n_out(this->n_ops());
 
-	for (size_t o = 0; o < this->n_ops(); o++) {
+	for (auto o : this->ops_range()) {
 		n_out[o] = this->ops[o].succ.size();
 	}
 
-	for (size_t t = 0; t < this->n_trains(); t++) {
-
-		auto& train = this->trains[t];
+	for (auto& train : this->trains) {
 		q.push(train.op_last());
 
 		while (!q.empty()) {
@@ -430,7 +429,7 @@ void Instance::set_max_bound()
 	queue<idx_t> q;
 
 	vector<idx_t> n_out(this->n_ops());
-	for (size_t o = 0; o < this->n_ops(); o++) {
+	for (auto o : this->ops_range()) {
 		n_out[o] = this->ops[o].succ.size();
 	}
 
@@ -442,8 +441,8 @@ void Instance::set_max_bound()
 
 	idx_t path_idx = 0;
 
-	for (size_t t = 0; t < this->n_trains(); t++) {
-		auto& train = this->trains[t];
+	for (auto& train : this->trains) {
+		q.push(train.op_last());
 
 		idx_t o_last = train.op_last(); 
 		op_cnt[o_last] = 1;
@@ -465,11 +464,11 @@ void Instance::set_max_bound()
 			}
 		}
 
-		train_dur[t] = dist[train.op_first];
-		total_dur += train_dur[t];
+		train_dur[train.idx] = dist[train.op_first];
+		total_dur += train_dur[train.idx];
 
 		train.path_idx = path_idx;
-		path_idx += op_cnt[train.op_first] - train.has_leading - train.has_trailing;
+		path_idx += op_cnt[train.op_first];
 	}
 
 	this->max_paths_len = path_idx;
@@ -477,10 +476,9 @@ void Instance::set_max_bound()
 
 	tim_t max_bound = 0;
 
-	for (size_t o = 0; o < this->n_ops(); o++) {
-		auto& op = this->ops[o];
+	for (auto& op : this->ops) {
 
-		tim_t op_bound = op.start_lb + dist[o] + total_dur - train_dur[op.train];
+		tim_t op_bound = op.start_lb + dist[op.idx] + total_dur - train_dur[op.train];
 		max_bound = max(max_bound, op_bound);
 	}
 
@@ -488,18 +486,6 @@ void Instance::set_max_bound()
 		if (op.start_ub == TIM_MAX) {
 			op.start_ub = max_bound;
 		}
-	}
-}
-
-
-void Instance::set_leading_trailing()
-{
-	for (auto& train : this->trains) {
-		auto& op_first = this->ops[train.op_first];
-		auto& op_last = this->ops[train.op_last()];
-
-		train.has_leading = op_first.res.empty();
-		train.has_trailing = op_last.res.empty();
 	}
 }
 
@@ -515,9 +501,7 @@ Instance::Paths Instance::get_random_paths() const
 
 		while (true) {
 			auto& op = this->ops[o];
-			if (!op.is_leading() && !op.is_trailing()) {
-				path.push_back(o);
-			}
+			path.push_back(o);
 
 			if (op.succ.empty()) {
 				break;
@@ -566,7 +550,7 @@ Instance::Paths::Paths(const Instance& inst)
 	this->ops.resize(inst.n_trains());
 	this->data.resize(inst.max_paths_len);
 
-	for (size_t t = 0; t < inst.n_trains(); t++) {
+	for (auto t : inst.trains_range()) {
 		this->ops[t].set_begin(this->data.data() + inst.trains[t].path_idx);
 		this->ops[t].clear();
 	}

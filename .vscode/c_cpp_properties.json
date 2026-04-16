@@ -6,7 +6,7 @@
 				"${default}",
 				"/opt/gurobi1201/linux64/include/"
 			],
-			"defines": [],
+			"defines": [ "NDEBUG" ],
 			"compilerPath": "/usr/bin/gcc-14",
 			"cStandard": "c17",
 			"cppStandard": "c++23",

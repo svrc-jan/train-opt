@@ -1,6 +1,7 @@
 #include "graph.hpp"
 
 #include <cassert>
+#include <iostream>
 
 using namespace std;
 
@@ -86,6 +87,14 @@ bool Graph::update_edge(const Edge& e_old, const Edge& e_new)
 }
 
 
+void Graph::clear_edges()
+{
+	for (auto& x : this->edges) {
+		x.clear();
+	}
+}
+
+
 Graph::Edge_entry* Graph::get_edge_entry(const Edge& e)
 {
 	if (e.v_from == VTX_MAX || e.v_from == VTX_MAX) {
@@ -106,6 +115,9 @@ bool Graph::has_cycle(const std::vector<vtx_t>& start_vtx)
 {
 	this->visited.clear();
 	this->rec_stack.clear();
+
+	assert(this->visited.get_true_count() == 0);
+	assert(this->rec_stack.get_true_count() == 0);
 
 	for (vtx_t v : start_vtx) {
 		if (this->has_cycle_rec(v)) {
@@ -129,6 +141,7 @@ bool Graph::has_cycle_rec(vtx_t v)
 
 	this->visited += v;
 	this->rec_stack += v;
+	assert(this->visited[v] && this->rec_stack[v]);
 
 	for (const auto& e : this->edges[v]) {
 		if (has_cycle_rec(e.v)) {
@@ -137,6 +150,8 @@ bool Graph::has_cycle_rec(vtx_t v)
 	}
 
 	this->rec_stack -= v;
+	assert(!this->rec_stack[v]);
+
 	return false;
 }
 

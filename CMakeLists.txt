@@ -14,15 +14,16 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_PROFILING "-g -pg -O3")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/build/debug)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_Profiling ${PROJECT_SOURCE_DIR}/build/profiling)
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/build/debug/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_PROFILING ${PROJECT_SOURCE_DIR}/build/profiling/lib)
-
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build/lib)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/build/debug)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/build/debug/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/build/debug/lib)
+set(CMAKE_CXX_OUTPUT_E)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_Profiling ${PROJECT_SOURCE_DIR}/build/profiling)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_PROFILING ${PROJECT_SOURCE_DIR}/build/profiling/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_PROFILING ${PROJECT_SOURCE_DIR}/build/profiling/lib)
 
 
@@ -49,6 +50,9 @@ target_link_libraries(instance_test instance)
 
 add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
+
+add_executable(localize_test apps/localize_test.cpp)
+target_link_libraries(localize_test localize)
 
 # add_executable(path_select_test apps/path_select_test.cpp)
 # target_link_libraries(path_select_test path_select)

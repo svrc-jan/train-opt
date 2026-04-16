@@ -4,7 +4,7 @@
 #include <bit>
 #include <cstdint>
 
-#define FLAG_MASK(n) (1U << n)
+#define FLAG_MASK(n) ((uint64_t)1 << n)
 
 class Flag
 {

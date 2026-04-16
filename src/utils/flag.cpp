@@ -32,21 +32,21 @@ void Flag::set_n_items(const size_t n_items)
 
 void Flag::fill(const bool value)
 {
-	const uint64_t mask = value ? ~(uint64_t)0 : 0;
+	uint64_t mask = value ? ~(uint64_t)0 : 0;
 	for (size_t i = 0; i < this->size; i++) {
 		this->data[i] = mask;
 	}
 
-	const size_t rem_bits = this->n_items % 64;
-	const uint64_t last_mask = (rem_bits != 0) ? ~(~(uint64_t)0 << rem_bits) : ~(uint64_t)0;
+	size_t rem_bits = this->n_items % 64;
+	uint64_t last_mask = (rem_bits != 0) ? (((uint64_t)1 << rem_bits) - 1) : ~(uint64_t)0;
 	
-	this->data[this->size - 1] &= last_mask;
+	this->data[this->size - 1] &= (mask & last_mask);
 }
 
 
 void Flag::or_equal(const Flag& other)
 {
-	const size_t min_size = MIN(this->size, other.size);
+	size_t min_size = MIN(this->size, other.size);
 	for (size_t i = 0; i < min_size; i++) {
 		this->data[i] |= other.data[i];
 	}

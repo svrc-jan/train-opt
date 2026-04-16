@@ -6,6 +6,7 @@
 #include <ranges>
 
 #include "utils/flag.hpp"
+#include "utils/lex_comp.hpp"
 
 class Graph
 {
@@ -27,9 +28,12 @@ public:
 	void set_n_vtx(size_t n_vtx);
 
 	void add_edge(const Edge& e);
+
 	bool remove_edge(const Edge& e);
 	bool update_edge(const Edge& e, size_t idx);
 	bool update_edge(const Edge& e_old, const Edge& e_new);
+
+	void clear_edges();
 	
 	bool has_cycle(const std::vector<vtx_t>& start_vtx);
 	bool make_order(const std::vector<vtx_t>& start_vtx);
@@ -60,6 +64,15 @@ struct Graph::Edge
 	vtx_t v_from = VTX_MAX;
 	vtx_t v_to = VTX_MAX;
 	dur_t d = 0;
+
+	inline bool operator<(const Edge& x) const 
+	{ return LEX_LT3(v_from, v_to, d, x.v_from, x.v_to, x.d); }
+
+	inline bool operator==(const Edge& x) const
+	{ return LEX_EQ3(v_from, v_to, d, x.v_from, x.v_to, x.d); }
+
+	inline bool operator!=(const Edge& x) const
+	{ return !(*this == x); }
 };
 
 

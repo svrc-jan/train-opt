@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <iostream>
 
 template<typename T>
 class Array
@@ -56,6 +57,8 @@ public:
 
 	template<typename C, typename I>
 	void assign_offset(C& container, I& idx, const bool clear=false);
+
+	void print(std::ostream& os) const;
 };
 
 
@@ -169,3 +172,21 @@ void Array<T>::assign_offset(C& container, I& idx, const bool clear)
 }
 
 
+template<typename T>
+void Array<T>::print(std::ostream& os) const
+{
+	bool is_first = true;
+	for (const T& x : *this) {
+		os << (is_first ? "[" : ", ");
+		os << x;
+		is_first = false;
+	}
+	os << (is_first ? "[ ]" : "]");
+}
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const Array<T>& array)
+{
+	array.print(os);
+	return os;
+}

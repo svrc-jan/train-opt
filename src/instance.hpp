@@ -10,9 +10,9 @@
 
 #include "utils/json_aux.hpp"
 #include "utils/macros.hpp"
+#include "utils/interval.hpp"
 #include "utils/array.hpp"
-
-
+#include "graph.hpp"
 
 class Instance
 {
@@ -37,7 +37,7 @@ public:
 
 	idx_t max_paths_len = 0;
 
-	Instance(const std::string& file_name);
+	Instance(const std::string& file_name, const bool verify=false);
 	~Instance();
 
 	METHOD_N(trains)
@@ -45,8 +45,14 @@ public:
 	METHOD_N(op_succ)
 	METHOD_N(op_pred)
 	METHOD_N(op_res)
-	inline size_t n_res() const { return this->res_name_to_idx.size(); }
 
+	METHOD_RANGE(trains, idx_t)
+	METHOD_RANGE(ops, idx_t)
+	METHOD_RANGE(objs, idx_t)
+
+	inline size_t n_res() const { return this->res_name_to_idx.size(); }
+	inline auto res_range() const { return Range<idx_t>(0, this->n_res()); }
+	
 	inline Paths get_empty_paths() const;
 	Paths get_random_paths() const;
 
@@ -67,7 +73,6 @@ private:
 	void propagate_lower_bounds();
 	void propagate_upper_bounds();
 	void set_max_bound();
-	void set_leading_trailing();
 
 	void verify_json(const json& inst_jsn) const;
 	void verify_pred();
@@ -117,9 +122,6 @@ struct Instance::Op
 	Array<idx_t> pred;
 	Array<Res> res;
 
-	inline bool is_leading() const;
-	inline bool is_trailing() const;
-
 	METHOD_N(succ)
 	METHOD_N(pred)
 	METHOD_N(res)
@@ -131,13 +133,13 @@ struct Instance::Train
 	idx_t idx = IDX_MAX;
 	idx_t op_first = IDX_MAX;
 	idx_t path_idx = IDX_MAX;
-	uint8_t has_leading = 0;
-	uint8_t has_trailing = 0;
 	Array<Op> ops;
 
 	METHOD_N(ops)
 	METHOD_AFTER(op)
 	METHOD_LAST(op)
+
+	auto ops_range() const { return Range<idx_t>(op_first, op_after()); }
 };
 
 
@@ -172,17 +174,6 @@ public:
 inline Instance::Paths Instance::get_empty_paths() const
 {
 	return Paths(*this);
-}
-
-inline bool Instance::Op::is_leading() const
-{
-	return this->pred.empty() && this->res.empty();
-}
-
-
-inline bool Instance::Op::is_trailing() const
-{
-	return this->succ.empty() && this->res.empty();
 }
 
 

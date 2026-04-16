@@ -10,13 +10,21 @@ using namespace std;
 int main(int argc, char const *argv[])
 {
 
+	vector<string> entries = {};
+
 	for (const auto& entry : filesystem::directory_iterator("data/")) {
 		if (entry.is_directory()) {
 			continue;
 		}
 
-		cout << entry.path() << endl;
-		Instance inst(entry.path());
+		entries.push_back(entry.path());
+	}
+
+	sort(entries.begin(), entries.end());
+
+	for (const auto& entry : entries) {
+		cout << entry << endl;
+		Instance inst(entry, true);
 	}
 
 	return 0;
