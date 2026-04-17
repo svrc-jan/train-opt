@@ -4,9 +4,12 @@
 			"name": "Linux",
 			"includePath": [
 				"${default}",
+				"${workspaceFolder}/src",
+				"${workspaceFolder}/apps",
+				"${workspaceFolder}/lib",
 				"/opt/gurobi1201/linux64/include/"
 			],
-			"defines": [ "NDEBUG" ],
+			"defines": [ ],
 			"compilerPath": "/usr/bin/gcc-14",
 			"cStandard": "c17",
 			"cppStandard": "c++23",

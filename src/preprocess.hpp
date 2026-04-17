@@ -36,6 +36,7 @@ public:
 	Flag is_res_req;
 	Flag is_res_opt;
 	Flag is_res_split;
+	Flag is_res_reentry;
 	
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
@@ -69,10 +70,12 @@ private:
 	void verify_juncts() const;
 	void verify_levels() const;
 
-	void make_junctions_bounds();
+	void make_junction_bounds();
+	void make_level_bounds();
 
 	void make_count();
 	void make_level_res();
+	void make_reentry_res();
 	void make_train_res();
 	void make_global_res();
 
@@ -129,13 +132,18 @@ struct Preprocess::Train
 
 	Flag is_res_req;
 	Flag is_res_opt;
+
+	OPERATOR_IDX(idx_t)
 	
 	METHOD_AFTER(junct)
 	METHOD_LAST(junct)
+	METHOD_N(juncts)
+
 	METHOD_AFTER(level)
 	METHOD_LAST(level)
+	METHOD_N(levels)
 
-	auto level_range() const { return Range<idx_t>(level_first, level_after()); }
+	auto levels_range() const { return Range<idx_t>(level_first, level_after()); }
 };
 
 

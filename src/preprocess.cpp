@@ -23,8 +23,12 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 
 	this->make_count();
 	this->make_level_res();
+	// this->make_reentry_res();
 	this->make_train_res();
 	this->make_global_res();
+
+	this->make_junction_bounds();
+	this->make_level_bounds();
 }
 
 
@@ -301,7 +305,7 @@ void Preprocess::verify_levels() const
 }
 
 
-void Preprocess::make_junctions_bounds()
+void Preprocess::make_junction_bounds()
 {
 	for (auto& inst_train : this->inst.trains) {
 		auto& train = this->trains[inst_train.idx];
@@ -329,6 +333,12 @@ void Preprocess::make_junctions_bounds()
 }
 
 
+void Preprocess::make_level_bounds()
+{
+
+}
+
+
 void Preprocess::make_count()
 {
 	size_t n_levels = this->n_levels();
@@ -353,6 +363,7 @@ void Preprocess::make_count()
 		}
 	}
 }
+
 
 
 void Preprocess::make_level_res()
@@ -413,6 +424,38 @@ void Preprocess::make_level_res()
 		assert(level.res.end() == level.res_opt.end());
 	}
 }
+
+
+void Preprocess::make_reentry_res()
+{
+	Flag res_entered(this->inst.n_res);
+	Flag train_reentries(this->inst.n_res);
+
+	vector<pair<pair<idx_t, idx_t>, idx_t>> reentries;
+
+	for (auto& train : this->trains) {
+		res_entered.clear();
+
+		for (auto level : train.levels) {
+			for (auto r : level.res) {
+				if (res_entered[r] && this->levels[level.idx - 1].res.find(r) == nullptr) {
+					reentries.push_back({{train.idx, level.idx}, r});
+					train_reentries += train.idx;
+				}
+				res_entered += r;
+			}
+		}
+	}
+
+	for (auto t : train_reentries.get_true_list()) {
+		for (auto& level : this->trains[t].levels) {
+			cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_opt << endl;
+		}
+	}
+
+	cout << "res reentries: " << reentries << endl;
+}
+
 
 
 void Preprocess::make_train_res()

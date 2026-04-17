@@ -203,3 +203,18 @@ bool Graph::make_order_rec(vtx_t v, vtx_t* stack, size_t& stack_size)
 
 	return false;
 }
+
+
+void Graph::update_time()
+{
+	for (auto v : this->order) {
+		this->time[v] = this->time_lb[v];
+	}
+
+	for (auto v : this->order) {
+		for (auto& e : this->edges[v]) {
+			this->time[e.v] = MAX(this->time[e.v], this->time[v] + e.d);
+		}
+	}
+}
+

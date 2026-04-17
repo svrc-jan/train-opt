@@ -5,6 +5,7 @@
 #include <limits>
 #include <ranges>
 
+#include "utils/macros.hpp"
 #include "utils/flag.hpp"
 #include "utils/lex_comp.hpp"
 
@@ -22,6 +23,11 @@ public:
 	static const dur_t DUR_MAX = std::numeric_limits<dur_t>::max();
 	static const tim_t TIM_MAX = std::numeric_limits<tim_t>::max();
 
+
+	std::vector<tim_t> time_lb = {};
+	std::vector<tim_t> time = {};
+	std::vector<vtx_t> order = {};
+
 	Graph(const size_t n_vtx=0);
 	~Graph() {}
 
@@ -37,6 +43,7 @@ public:
 	
 	bool has_cycle(const std::vector<vtx_t>& start_vtx);
 	bool make_order(const std::vector<vtx_t>& start_vtx);
+	void update_time();
 	
 private:
 	struct Edge_entry;
@@ -47,15 +54,10 @@ private:
 	Flag visited;
 	Flag rec_stack;
 
-	std::vector<vtx_t> order = {};
-	std::vector<tim_t> time_lb = {};
-	std::vector<tim_t> time = {};
-
 	Edge_entry* get_edge_entry(const Edge& e);
 
 	bool has_cycle_rec(vtx_t v);
 	bool make_order_rec(vtx_t v, vtx_t* stack, size_t& stack_size);
-	std::vector<tim_t>& update_time();
 };
 
 

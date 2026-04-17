@@ -34,21 +34,37 @@ int main(int argc, char const *argv[])
 			Localize local(prepr);
 			Localize local_split(prepr, false);
 
-			cout << "choke areas:" << endl;
-			for (auto& area : local.areas_choke) {
-				cout << area.idx << " "  << area.res << endl;
-			}
+			// cout << "choke areas:" << endl;
+			// for (auto& area : local.areas_choke) {
+			// 	cout << area.idx << " "  << area.res << endl;
+			// }
 			
-			cout << "branch areas:" << endl;
-			for (auto& area : local.areas_branch) {
-				cout << area.idx << " " << area.res << endl;
+			// cout << "branch areas:" << endl;
+			// for (auto& area : local.areas_branch) {
+			// 	cout << area.idx << " " << area.res << endl;
+			// }
+
+			// if (local.n_areas_branch() != local_split.n_areas_branch()) {
+			// 	cout << "branch areas - split:" << endl;
+			// 	for (auto& area : local_split.areas_branch) {
+			// 		cout << area.idx << " "  << area.res << endl;
+			// 	}
+			// }
+
+			size_t t = 0;
+			for (auto& train : local.trains) {
+				cout << t << ": " << train.levels << endl;
+				t++;
 			}
+			cout << "choke: " << local.n_areas_choke() << ", branch: " << local.n_areas_branch() << endl;
 
 			if (local.n_areas_branch() != local_split.n_areas_branch()) {
-				cout << "branch areas - split:" << endl;
-				for (auto& area : local_split.areas_branch) {
-					cout << area.idx << " "  << area.res << endl;
+				t = 0;
+				for (auto& train : local_split.trains) {
+					cout << t << ": " << train.levels << endl;
+					t++;
 				}
+				cout << "choke: " << local_split.n_areas_choke() << ", branch: " << local_split.n_areas_branch() << endl;
 			}
 		}
 		else {
@@ -56,7 +72,7 @@ int main(int argc, char const *argv[])
 			Localize local_split(prepr, false);
 
 			cout << "choke: " << local.n_areas_choke() << "/" << local_split.n_areas_choke() <<
-				", branch: " << local.n_areas_branch() << "/" << local_split.n_areas_branch() << endl;;
+				", branch: " << local.n_areas_branch() << "/" << local_split.n_areas_branch() << endl;
 		}
 	}
 	

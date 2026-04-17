@@ -122,6 +122,8 @@ struct Instance::Op
 	Array<idx_t> pred;
 	Array<Res> res;
 
+	OPERATOR_IDX(idx_t)
+
 	METHOD_N(succ)
 	METHOD_N(pred)
 	METHOD_N(res)

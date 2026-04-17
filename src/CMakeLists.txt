@@ -11,3 +11,6 @@ target_link_libraries(localize preprocess)
 
 add_library(graph graph.cpp)
 target_link_libraries(graph flag)
+
+add_library(solver solver.cpp)
+target_link_libraries(solver localize graph)

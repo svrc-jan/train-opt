@@ -32,7 +32,7 @@ int main(int argc, char const *argv[])
 		Preprocess prepr(inst);
 
 		// for (auto& level : prepr.levels) {
-		// 	cout << level.train << "." << level.idx << " - req: " << level.req_res << ", opt: " << level.opt_res << endl;
+		// 	cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_req << endl;
 		// }
 	}
 	
