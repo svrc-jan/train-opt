@@ -29,6 +29,13 @@ int main(int argc, char const *argv[])
 		Instance inst(entry);
 		Preprocess prepr(inst);
 		Localize local(prepr);
+
+		if (entries.size() == 1) {
+			for (auto& area : local.areas) {
+				auto typ = (area.typ == AREA_CHOKE) ? " choke  " : " branch ";
+				cout << area.idx << typ << area.res << endl;
+			}
+		}
 	}
 	
 	return 0;

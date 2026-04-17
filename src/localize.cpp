@@ -15,9 +15,9 @@ Localize::Localize(const Preprocess& prepr)
 
 void Localize::make_areas()
 {
-	Disjoint_set disj_set(this->inst.n_res());
+	size_t n_res = this->inst.n_res();
+	Disjoint_set disj_set(n_res);
 
-	
 	vector<idx_t> prev_req_res = {};
 	vector<idx_t> req_res;
 	vector<idx_t> opt_res;
@@ -56,14 +56,40 @@ void Localize::make_areas()
 		}
 	}
 
-	cout << "num res: " << this->inst.n_res() << ", num sect: " << disj_set.n_sets << endl;
 
 	this->areas.resize(disj_set.n_sets);
 	for (auto a : this->areas_range()) {
-		this->areas[a].idx = a;
+		auto& area = this->areas[a];
+		area.idx = a;
+		area.res.set_size(0);
 	}
 
-	auto dist_set_res = disj_set.get_result();
+	auto set_idx = disj_set.get_result();
+	
+	for (auto r : this->inst.res_range()) {
+		this->areas[set_idx[r]].res.increment_size(1);
+	}
+
+	this->area_res.resize(n_res);
+	size_t area_res_idx = 0;
+
+	for (auto& area : this->areas) {
+		area.res.assign_offset(this->area_res, area_res_idx, true);
+	}
+
+	this->res_area.resize(n_res);
+	for (auto r : this->inst.res_range()) {
+		idx_t a = set_idx[r];
+		this->res_area[r] = a;
+
+		auto& area = this->areas[a];
+		this->areas[a].res.push_back(r);
+
+		uint8_t area_typ = (this->prepr.global_res_state[r] == RES_REQ) ? AREA_CHOKE : AREA_BRANCH; 
+		
+		assert(area.typ == area_typ || area.typ == AREA_DEFAULT);
+		area.typ = area_typ;
+	}
 
 }
 
