@@ -3,13 +3,6 @@
 #include "preprocess.hpp"
 
 
-enum Area_type
-{
-	AREA_BRANCH,
-	AREA_CHOKE,
-	AREA_DEFAULT = 0xff
-};
-
 class Localize
 {
 public:
@@ -21,19 +14,27 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
-	Localize(const Preprocess& prepr);
+	Localize(const Preprocess& prepr, const bool group_opt=true);
+
 
 	std::vector<Area> areas = {};
+	Array<Area> areas_choke;
+	Array<Area> areas_branch;
+
+	Flag is_area_choke;
 	std::vector<idx_t> res_area = {};
 	
-
 	METHOD_N(areas);
 	METHOD_RANGE(areas, idx_t)
+
+	METHOD_N(areas_choke);
+	METHOD_N(areas_branch);
 
 private:
 	std::vector<idx_t> area_res = {};
 
-	void make_areas();
+	void make_areas(const bool group_opt);
+	void make_area_trains();
 
 };
 
@@ -41,7 +42,10 @@ private:
 struct Localize::Area
 {
 	idx_t idx = IDX_MAX;
-	uint8_t typ = AREA_DEFAULT;
 	Array<idx_t> res;
 	Array<idx_t> trains;
 };
+
+
+
+

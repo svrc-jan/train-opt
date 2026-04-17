@@ -1,16 +1,7 @@
 #pragma once
 
-#include "utils/interval.hpp"
+#include "utils/flag.hpp"
 #include "instance.hpp"
-
-
-enum Res_state_enum
-{
-	RES_MISS,
-	RES_OPT,
-	RES_REQ,
-	RES_SPLIT,
-};
 
 
 class Preprocess
@@ -42,10 +33,9 @@ public:
 	std::vector<Train> trains = {};
 	std::vector<Level> levels = {};
 
-	std::vector<cnt_t> op_count = {};
-	std::vector<cnt_t*> res_count = {};
-
-	std::vector<uint8_t> global_res_state = {};
+	Flag is_res_req;
+	Flag is_res_opt;
+	Flag is_res_split;
 	
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
@@ -66,12 +56,11 @@ private:
 	std::vector<Idx_op> level_succ = {};
 	std::vector<Idx_op> level_pred = {};
 
+	std::vector<cnt_t> op_count = {};
+	std::vector<cnt_t*> res_count = {};
 	std::vector<cnt_t> res_count_data = {};
 
-	std::vector<idx_t> level_req_res = {};
-	std::vector<idx_t> level_opt_res = {};
-
-	std::vector<uint8_t> train_res_state = {};
+	std::vector<idx_t> level_res = {};
 	
 
 	void make_junctions();
@@ -119,8 +108,9 @@ struct Preprocess::Level
 	Array<Idx_op> succ;
 	Array<Idx_op> pred;
 
-	Array<idx_t> req_res;
-	Array<idx_t> opt_res;
+	Array<idx_t> res;
+	Array<idx_t> res_req;
+	Array<idx_t> res_opt;
 
 	METHOD_N(juncts);
 	METHOD_N(succ);
@@ -137,7 +127,8 @@ struct Preprocess::Train
 	Array<Junction> juncts; 
 	Array<Level> levels;
 
-	Array<uint8_t> res_state;
+	Flag is_res_req;
+	Flag is_res_opt;
 	
 	METHOD_AFTER(junct)
 	METHOD_LAST(junct)

@@ -54,17 +54,5 @@ target_link_libraries(preprocess_test preprocess)
 add_executable(localize_test apps/localize_test.cpp)
 target_link_libraries(localize_test localize)
 
-# add_executable(path_select_test apps/path_select_test.cpp)
-# target_link_libraries(path_select_test path_select)
-
 add_executable(graph_test apps/graph_test.cpp)
 target_link_libraries(graph_test path_graph)
-
-add_executable(path_and_cycle_test apps/path_and_cycle_test.cpp)
-target_link_libraries(path_and_cycle_test path_and_cycle)
-
-# optimize stable parts
-# target_compile_options(instance PRIVATE -O3)
-# target_compile_options(preprocess PRIVATE -O3)
-# target_compile_options(path_select PRIVATE -O3)
-# target_compile_options(graph PRIVATE -O3)

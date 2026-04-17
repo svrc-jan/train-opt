@@ -134,7 +134,7 @@ void Instance::parse(const json& inst_jsn)
 
 				for (const auto& res_jsn : op_jsn["resources"]) {
 					idx_t res_idx = this->get_res_idx(res_jsn["resource"]);
-					assert(res_idx < this->n_res());
+					assert(res_idx < this->n_res);
 
 					dur_t res_time = 0;
 					json_update(res_time, "release_time", res_jsn);
@@ -524,8 +524,8 @@ Instance::idx_t Instance::add_res_name(const std::string& res_name)
 	idx_t res_idx = get_res_idx(res_name);
 
 	if (res_idx == IDX_MAX) {
-		res_idx = this->n_res();
-		assert(res_idx < IDX_MAX);
+		res_idx = this->n_res++;
+		assert(res_idx == this->res_name_to_idx.size() && res_idx < IDX_MAX);
 
 		this->res_name_to_idx[res_name] = res_idx;
 	}
@@ -551,7 +551,7 @@ Instance::Paths::Paths(const Instance& inst)
 	this->data.resize(inst.max_paths_len);
 
 	for (auto t : inst.trains_range()) {
-		this->ops[t].set_begin(this->data.data() + inst.trains[t].path_idx);
+		this->ops[t].set_begin(this->data.data() + inst.trains[t].path_idx, false);
 		this->ops[t].clear();
 	}
 }

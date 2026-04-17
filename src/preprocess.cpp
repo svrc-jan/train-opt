@@ -332,14 +332,13 @@ void Preprocess::make_junctions_bounds()
 void Preprocess::make_count()
 {
 	size_t n_levels = this->n_levels();
-	size_t n_res = this->inst.n_res();
 
 	this->op_count.resize(n_levels, 0);
 	this->res_count.resize(n_levels, nullptr);
-	this->res_count_data.resize(n_levels*n_res, 0);
+	this->res_count_data.resize(n_levels*this->inst.n_res, 0);
 
 	for (auto l : this->levels_range()) {
-		this->res_count[l] = &this->res_count_data[l*n_res];
+		this->res_count[l] = &this->res_count_data[l*this->inst.n_res];
 	}
 
 	for (auto& op : this->inst.ops) {
@@ -358,85 +357,83 @@ void Preprocess::make_count()
 
 void Preprocess::make_level_res()
 {
-	size_t req_idx = 0;
-	size_t opt_idx = 0;
-
+	size_t res_idx = 0;
+	
 	for (auto& level : this->levels) {
-		level.req_res.set_size(0);
-		level.opt_res.set_size(0);
+		level.res.set_size(0);
+		level.res_req.set_size(0);
+		level.res_opt.set_size(0);
 
 		cnt_t o_cnt = this->op_count[level.idx];
 		for (auto r : this->inst.res_range()) {
 			cnt_t r_cnt = this->res_count[level.idx][r];
 			
-			if (r_cnt == 0) {
-				// nothing
-			}
-			else if (r_cnt == o_cnt) {
-				level.req_res.increment_size(1);
-				req_idx += 1;
-			}
-			else {
-				assert(r_cnt < o_cnt);
-				level.opt_res.increment_size(1);
-				opt_idx += 1;
+			if (r_cnt > 0) {
+				level.res.increment_size(1);
+				res_idx += 1;
+
+				if (r_cnt == o_cnt) {
+					level.res_req.increment_size(1);
+				}
+				else {
+					assert(r_cnt < o_cnt);
+					level.res_opt.increment_size(1);
+				}
 			}
 		}
 	}
 
-	this->level_req_res.resize(req_idx);
-	this->level_opt_res.resize(opt_idx);
-
-	req_idx = 0;
-	opt_idx = 0;
-
+	this->level_res.resize(res_idx);
+	res_idx = 0;
+	
 	for (auto& level : this->levels) {
-		level.req_res.assign_offset(this->level_req_res, req_idx, true);
-		level.opt_res.assign_offset(this->level_opt_res, opt_idx, true);
+		level.res.assign_offset(this->level_res, res_idx, false);
+		
+		level.res_req.set_begin(level.res.begin());
+		level.res_opt.set_begin(level.res.begin() + level.res_req.size(), false);
 
+		level.res_req.clear();
+		level.res_opt.clear();
 
 		cnt_t o_cnt = this->op_count[level.idx];
 		for (auto r : this->inst.res_range()) {
 			cnt_t r_cnt = this->res_count[level.idx][r];
 			
-			if (r_cnt == 0) {
-				// nothing
-			}
-			else if (r_cnt == o_cnt) {
-				level.req_res.push_back(r);
-			}
-			else {
-				level.opt_res.push_back(r);
+			if (r_cnt > 0) {
+				if (r_cnt == o_cnt) {
+					level.res_req.push_back(r);
+				}
+				else {
+					level.res_opt.push_back(r);
+				}	
 			}
 		}
+
+		assert(level.res_req.size() + level.res_opt.size() == level.res.size());
+		assert(level.res.end() == level.res_opt.end());
 	}
 }
 
 
 void Preprocess::make_train_res()
 {
-	size_t n_res = this->inst.n_res();
-	size_t n_trains = this->n_trains();
-	
-	this->train_res_state.resize(n_trains*n_res, RES_MISS);
-
 	for (auto& train : this->trains) {
-		train.res_state.set_begin(&this->train_res_state[train.idx*n_res]);
-		train.res_state.set_size(n_res);
+		train.is_res_req.set_n_items(this->inst.n_res);
+		train.is_res_opt.set_n_items(this->inst.n_res);
 
 		for (auto& level : train.levels) {
-			for (auto& r : level.req_res) {
-				train.res_state[r] |= RES_REQ;
+			for (auto& r : level.res_req) {
+				train.is_res_req += r;
 			}
-			for (auto& r : level.opt_res) {
-				train.res_state[r] |= RES_OPT;
+			for (auto& r : level.res_opt) {
+				train.is_res_opt += r;
 			}
 		}
-		
-		for (auto& x : train.res_state) {
-			if (x == RES_SPLIT) {
-				x = RES_REQ;
-			}
+
+		train.is_res_opt.set_false(train.is_res_req);
+
+		for (auto r : this->inst.res_range()) {
+			assert(train.is_res_req[r] + train.is_res_opt[r] <= 1);
 		}
 	}
 }
@@ -444,12 +441,22 @@ void Preprocess::make_train_res()
 
 void Preprocess::make_global_res()
 {
-	size_t n_res = this->inst.n_res();
-	this->global_res_state.resize(n_res, RES_MISS);
+	this->is_res_req.set_n_items(this->inst.n_res);
+	this->is_res_opt.set_n_items(this->inst.n_res);
+	this->is_res_split.set_n_items(this->inst.n_res);
 
 	for (auto& train : this->trains) {
-		for (auto r : this->inst.res_range()) {
-			this->global_res_state[r] |= train.res_state[r];
-		}
+		this->is_res_req.set_true(train.is_res_req);
+		this->is_res_opt.set_true(train.is_res_opt);
+	}
+
+	this->is_res_split.set_true(this->is_res_req);
+	this->is_res_split.mask(this->is_res_opt);
+
+	this->is_res_req.set_false(this->is_res_split);
+	this->is_res_opt.set_false(this->is_res_split);
+
+	for (auto r : this->inst.res_range()) {
+		assert(this->is_res_req[r] + this->is_res_opt[r] + this->is_res_split[r] == 1);
 	}
 }

@@ -6,6 +6,7 @@
 
 using namespace std;
 
+
 int main(int argc, char const *argv[])
 {
 	vector<string> entries = {};
@@ -27,14 +28,35 @@ int main(int argc, char const *argv[])
 	for (const auto& entry : entries) {
 		cout << entry << endl;
 		Instance inst(entry);
-		Preprocess prepr(inst);
-		Localize local(prepr);
+		Preprocess prepr(inst);		
 
 		if (entries.size() == 1) {
-			for (auto& area : local.areas) {
-				auto typ = (area.typ == AREA_CHOKE) ? " choke  " : " branch ";
-				cout << area.idx << typ << area.res << endl;
+			Localize local(prepr);
+			Localize local_split(prepr, false);
+
+			cout << "choke areas:" << endl;
+			for (auto& area : local.areas_choke) {
+				cout << area.idx << " "  << area.res << endl;
 			}
+			
+			cout << "branch areas:" << endl;
+			for (auto& area : local.areas_branch) {
+				cout << area.idx << " " << area.res << endl;
+			}
+
+			if (local.n_areas_branch() != local_split.n_areas_branch()) {
+				cout << "branch areas - split:" << endl;
+				for (auto& area : local_split.areas_branch) {
+					cout << area.idx << " "  << area.res << endl;
+				}
+			}
+		}
+		else {
+			Localize local(prepr);
+			Localize local_split(prepr, false);
+
+			cout << "choke: " << local.n_areas_choke() << "/" << local_split.n_areas_choke() <<
+				", branch: " << local.n_areas_branch() << "/" << local_split.n_areas_branch() << endl;;
 		}
 	}
 	

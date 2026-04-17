@@ -22,12 +22,13 @@ public:
 	inline void set_true(size_t idx) { this->data[idx/64] |= FLAG_MASK(idx % 64); }
 	inline void set_false(size_t idx) { this->data[idx/64] &= ~FLAG_MASK(idx % 64); }
 
-	inline bool operator[](size_t idx) { return this->get(idx); }
+	inline bool operator[](size_t idx) const { return this->get(idx); }
 	inline void operator+=(size_t idx) { this->set_true(idx); }
 	inline void operator-=(size_t idx) { this->set_false(idx); }
 	
-	void or_equal(const Flag& other);
-	inline void operator|=(const Flag& other) { this->or_equal(other); }
+	void set_true(const Flag& other);
+	void set_false(const Flag& other);
+	void mask(const Flag& other);
 
 	inline size_t get_true_count() const;
 	std::vector<size_t> get_true_list() const;

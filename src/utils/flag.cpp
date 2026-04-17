@@ -38,17 +38,35 @@ void Flag::fill(const bool value)
 	}
 
 	size_t rem_bits = this->n_items % 64;
-	uint64_t last_mask = (rem_bits != 0) ? (((uint64_t)1 << rem_bits) - 1) : ~(uint64_t)0;
+	uint64_t last_mask = (rem_bits != 0) ? (((uint64_t)1 << rem_bits) - 1) : mask;
 	
 	this->data[this->size - 1] &= (mask & last_mask);
 }
 
 
-void Flag::or_equal(const Flag& other)
+void Flag::set_true(const Flag& other)
 {
 	size_t min_size = MIN(this->size, other.size);
 	for (size_t i = 0; i < min_size; i++) {
 		this->data[i] |= other.data[i];
+	}
+}
+
+
+void Flag::set_false(const Flag& other)
+{
+	size_t min_size = MIN(this->size, other.size);
+	for (size_t i = 0; i < min_size; i++) {
+		this->data[i] &= ~other.data[i];
+	}
+}
+
+
+void Flag::mask(const Flag& other)
+{
+	size_t min_size = MIN(this->size, other.size);
+	for (size_t i = 0; i < min_size; i++) {
+		this->data[i] &= other.data[i];
 	}
 }
 
@@ -60,8 +78,8 @@ vector<size_t> Flag::get_true_list() const
 	
 	for (size_t i = 0; i < this->size; i++) {
 		uint64_t item = this->data[i];
-		for (size_t j = 0; j < 64 && item != 0; i++) {
-			if ((item & (uint64_t)1) != 0) {
+		for (size_t j = 0; j < 64 && item != 0; j++) {
+			if (item & (uint64_t)1) {
 				res.push_back(i*64 + j);
 			}
 			item >>= 1;

@@ -17,7 +17,6 @@ int main(int argc, char const *argv[])
 		file_name = string(argv[1]);
 	}
 
-
 	cout << file_name << endl;
 	Instance inst(file_name);
 	Path_and_cycle pnc(inst);
@@ -26,7 +25,6 @@ int main(int argc, char const *argv[])
 
 	pnc.set_paths(inst.get_random_paths());
 	pnc.solve();
-
 
 	return 0;
 }

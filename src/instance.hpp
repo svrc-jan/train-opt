@@ -35,6 +35,7 @@ public:
 	Array<Op> ops;
 	Array<Obj> objs;
 
+	idx_t n_res = 0;
 	idx_t max_paths_len = 0;
 
 	Instance(const std::string& file_name, const bool verify=false);
@@ -50,8 +51,7 @@ public:
 	METHOD_RANGE(ops, idx_t)
 	METHOD_RANGE(objs, idx_t)
 
-	inline size_t n_res() const { return this->res_name_to_idx.size(); }
-	inline auto res_range() const { return Range<idx_t>(0, this->n_res()); }
+	inline auto res_range() const { return Range<idx_t>(0, this->n_res); }
 	
 	inline Paths get_empty_paths() const;
 	Paths get_random_paths() const;
