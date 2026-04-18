@@ -20,15 +20,6 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		this->verify_juncts();
 		this->verify_levels();
 	}
-
-	this->make_count();
-	this->make_level_res();
-	// this->make_reentry_res();
-	this->make_train_res();
-	this->make_global_res();
-
-	this->make_junction_bounds();
-	this->make_level_bounds();
 }
 
 
@@ -304,6 +295,11 @@ void Preprocess::verify_levels() const
 	}
 }
 
+
+void Preprocess::make_junction_bounds()
+{
+	
+}
 
 void Preprocess::make_junction_bounds()
 {

@@ -9,8 +9,8 @@ target_link_libraries(preprocess instance disjoint_set flag)
 add_library(localize localize.cpp)
 target_link_libraries(localize preprocess)
 
-add_library(graph graph.cpp)
-target_link_libraries(graph flag)
+add_library(event_graph event_graph.cpp)
+target_link_libraries(event_graph flag)
 
 add_library(solver solver.cpp)
 target_link_libraries(solver localize graph)

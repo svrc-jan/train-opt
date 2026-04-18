@@ -20,7 +20,7 @@ int main(int argc, char const *argv[])
 
 	Instance inst(file_name);
 	
-	Graph graph(inst.n_ops());
+	Event_graph graph(inst.n_ops());
 
 	for (auto& op : inst.ops) {
 		for (auto s : op.succ) {

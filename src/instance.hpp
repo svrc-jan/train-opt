@@ -10,9 +10,8 @@
 
 #include "utils/json_aux.hpp"
 #include "utils/macros.hpp"
-#include "utils/interval.hpp"
+#include "utils/range.hpp"
 #include "utils/array.hpp"
-#include "graph.hpp"
 
 class Instance
 {

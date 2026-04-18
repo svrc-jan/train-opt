@@ -55,7 +55,10 @@ add_executable(localize_test apps/localize_test.cpp)
 target_link_libraries(localize_test localize)
 
 add_executable(graph_test apps/graph_test.cpp)
-target_link_libraries(graph_test graph)
+target_link_libraries(graph_test event_graph)
 
 add_executable(solver_test apps/solver_test.cpp)
 target_link_libraries(solver_test solver)
+
+add_executable(flag_test apps/flag_test.cpp)
+target_link_libraries(flag_test flag)

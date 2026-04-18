@@ -9,11 +9,28 @@
 class Flag
 {
 public:
+	struct Iter
+	{
+		const Flag& flag;
+		size_t idx = 0;
+		size_t i = 0;
+		size_t j = 0;
+
+		Iter(const Flag& flag) : flag(flag), idx(0), i(0), j(0) { roll_to_next(); };
+
+		inline size_t operator*() { return idx; };
+		inline bool operator!=(size_t x) { return idx != x; }
+		inline void operator++() { roll_to_next(); }
+
+		void roll_to_next();
+	};
+
+	size_t n_items = 0;
 
 	Flag(const size_t n_items=0);
 	~Flag();
 
-	void set_n_items(const size_t n_items);
+	void set_n_items(const size_t n);
 
 	void fill(const bool value);
 	inline void clear() { this->fill(false); }
@@ -26,35 +43,31 @@ public:
 	inline void operator+=(size_t idx) { this->set_true(idx); }
 	inline void operator-=(size_t idx) { this->set_false(idx); }
 	
+	void set(const Flag& other);
 	void set_true(const Flag& other);
 	void set_false(const Flag& other);
 	void mask(const Flag& other);
 
-	inline size_t get_true_count() const;
+	Iter begin() const { return Iter(*this); }
+	size_t end() const { return this->n_items; }
+
+	size_t get_true_count() const;
 	std::vector<size_t> get_true_list() const;
 
 private:
 	uint64_t* data = nullptr;
-	size_t size = 0;
-	size_t n_items = 0;
+	size_t capacity = 0;
 	
 	void alloc_data(const size_t n_items);
-	inline static size_t get_required_size(const size_t n_items);
+
+	inline size_t req_size() const
+	{ return Flag::get_required_size(this->n_items); };
+
+	inline static size_t get_required_size(const size_t n)
+	{ return (n == 0) ? 0 : (n - 1)/64 + 1;}
 };
 
 
-inline size_t Flag::get_true_count() const
-{
-	size_t count = 0;
-	for (size_t i = 0; i < this->size; i++) {
-		count += std::popcount(this->data[i]);
-	}
-	return count;
-}
 
 
 
-inline size_t Flag::get_required_size(const size_t n_items)
-{
-	return (n_items - 1)/64 + 1;
-}

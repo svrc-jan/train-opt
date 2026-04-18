@@ -3,7 +3,7 @@
 using namespace std;
 
 Path_and_cycle::Path_and_cycle(const Instance& inst) 
-	: inst(inst), graph(Graph())
+	: inst(inst), graph(Event_graph())
 {
 	this->op2edge.resize(inst.n_ops(), Edge_idx());
 

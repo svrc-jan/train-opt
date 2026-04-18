@@ -3,7 +3,7 @@
 #include "instance.hpp"
 #include "preprocess.hpp"
 #include "localize.hpp"
-#include "graph.hpp"
+#include "event_graph.hpp"
 
 class Solver
 {
@@ -30,7 +30,7 @@ public:
 	tim_t get_obj();
 
 private:
-	Graph graph;
+	Event_graph graph;
 
 	std::vector<Res_use*> res_use;
 	std::vector<Res_use> res_use_data;

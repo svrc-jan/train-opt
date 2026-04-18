@@ -25,7 +25,7 @@ private:
 	struct Res_lock;
 	struct Res_col;
 
-	Graph graph;
+	Event_graph graph;
 	Instance::Paths paths;
 
 	std::vector<Edge_idx> op2edge = {};

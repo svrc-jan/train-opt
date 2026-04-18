@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/flag.hpp"
+#include "utils/interval.hpp"
 #include "instance.hpp"
 
 
@@ -62,7 +63,6 @@ private:
 	std::vector<cnt_t> res_count_data = {};
 
 	std::vector<idx_t> level_res = {};
-	
 
 	void make_junctions();
 	void make_levels();
@@ -72,6 +72,7 @@ private:
 
 	void make_junction_bounds();
 	void make_level_bounds();
+	void make_resource_chunks();
 
 	void make_count();
 	void make_level_res();
