@@ -58,6 +58,8 @@ private:
 	std::vector<Idx_op> level_succ = {};
 	std::vector<Idx_op> level_pred = {};
 
+	Flag is_op_req;
+
 	std::vector<cnt_t> op_count = {};
 	std::vector<cnt_t*> res_count = {};
 	std::vector<cnt_t> res_count_data = {};
@@ -69,6 +71,8 @@ private:
 
 	void verify_juncts() const;
 	void verify_levels() const;
+
+	void make_req_ops();
 
 	void make_junction_bounds();
 	void make_level_bounds();

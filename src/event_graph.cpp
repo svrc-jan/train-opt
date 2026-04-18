@@ -43,6 +43,37 @@ void Event_graph::add_edge(const Edge& x)
 }
 
 
+bool Event_graph::set_edge_by_idx(const Edge& x, size_t idx)
+{
+	Edge_entry& e_in = this->edges_in[x.v.end][idx];
+	Edge_entry& e_out = this->edges_in[x.v.end][idx];
+
+	if (x.v.start != e_in.v || x.v.end != e_out.v) {
+		return false;
+	}
+
+	e_in = {x.e, x.v.start, x.d};
+	e_out = {x.e, x.v.end, x.d};
+
+	return true;
+}
+
+
+void Event_graph::set_all_edge_idx(edg_t idx)
+{
+	for (auto& x : this->edges_in) {
+		for (auto& y : x) {
+			y.e = idx;
+		}
+	}
+
+	for (auto& x : this->edges_out) {
+		for (auto& y : x) {
+			y.e = idx;
+		}
+	}
+}
+
 void Event_graph::add_edges(const vector<Edge>& edges)
 {
 	for (auto& x : edges) {
@@ -85,12 +116,14 @@ void Event_graph::remove_last_edges(const std::vector<Edge>& edges)
 		if (cnt > 0) {
 			auto& x = this->edges_in[v];
 			x.resize(x.size() - cnt);
+			this->need_update += v;
 		}
 
 		cnt = out_count[v];
 		if (cnt > 0) {
 			auto& x = this->edges_out[v];
 			x.resize(x.size() - cnt);
+			this->need_update += v;
 		}
 	}
 }
@@ -100,6 +133,9 @@ void Event_graph::remove_last_edges_small(const std::vector<Edge>& edges)
 	for (auto& x : edges) {
 		this->edges_in[x.v.end].pop_back();
 		this->edges_out[x.v.start].pop_back();
+
+		this->need_update += x.v.start;
+		this->need_update += x.v.end;
 	}
 }
 
@@ -119,9 +155,7 @@ bool Event_graph::update()
 	this->cycle_vtx = VTX_MAX;
 
 	for (vtx_t v : need_list) {
-		vtx_t ret = this->get_cycle_rec(v);
-		if (ret < VTX_MAX) {
-			this->cycle_vtx = ret;
+		if (this->get_cycle_rec(v)) {
 			return true;
 		}
 	}
@@ -132,30 +166,32 @@ bool Event_graph::update()
 }
 
 
-Event_graph::vtx_t Event_graph::get_cycle_rec(vtx_t v)
+bool Event_graph::get_cycle_rec(vtx_t v)
 {
 	if (this->rec_stack[v]) {
-		return v;
+		this->cycle_vtx = v;
+		return true;
 	}
 
 	if (this->visited[v]) {
-		return VTX_MAX;
+		return false;
 	}
 
 	this->visited += v;
 	this->rec_stack += v;
 
 	for (const auto& x : this->edges_out[v]) {
-		vtx_t ret = get_cycle_rec(x.v);
-		if (ret < VTX_MAX) {
-			return ret;
+		if(get_cycle_rec(x.v)) {
+			return true;
 		}
 	}
 
 	this->rec_stack -= v;
 
-	return VTX_MAX;
+	return false;
 }
+
+
 
 void Event_graph::update_time(vtx_t v)
 {
@@ -168,7 +204,7 @@ void Event_graph::update_time(vtx_t v)
 
 	for (auto& x : edges_in[v]) {
 		this->update_time(x.v);
-		tim_t new_time = this->_time[x.v] + x.d;
+		tim_t new_time = this->_time[x.v] + (tim_t)x.d;
 		if (this->_time[v] < new_time) {
 			this->_time[v] = new_time;
 			this->time_pred[v] = x;
@@ -214,8 +250,26 @@ const vector<Event_graph::Edge_vertex>& Event_graph::get_shortest_cycle(vtx_t st
 		auto pred = this->cycle_pred[v];
 		ret.push_back(pred);
 		v = pred.v;
+		assert(v < this->n_vtx);
 	} while(v != start);
 
 	return ret;
 }
 
+const vector<Event_graph::Edge_vertex>& Event_graph::get_critical_path(vtx_t start)
+{
+	vector<Edge_vertex>& ret = this->critical_path;
+	ret.clear();
+
+	vtx_t v = start;
+	do {
+		auto pred = this->time_pred[v];
+		ret.push_back(pred);
+		v = pred.v;
+		assert(v < this->n_vtx);
+	} while(v != start);
+
+	return ret;
+
+
+}

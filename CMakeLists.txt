@@ -41,8 +41,6 @@ message(STATUS "gurobi - api lib: " ${GUROBI_API_LIB}
 	", base lib: " ${GUROBI_BASE_LIB} 
 	", include: " ${GUROBI_INC})
 
-message(STATUS "compile flags: " ${CMAKE_CXX_})
-
 add_subdirectory(src)
 
 add_executable(instance_test apps/instance_test.cpp)

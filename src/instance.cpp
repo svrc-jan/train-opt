@@ -181,6 +181,8 @@ void Instance::parse(const json& inst_jsn)
 		json_update(obj.coeff,     "coeff",     obj_jsn);
 		json_update(obj.increment, "increment", obj_jsn);
 
+		assert(obj.coeff == 0 || obj.increment == 0);
+
 		if (obj.coeff == 0 && obj.increment == 0) {
 			continue;
 		}

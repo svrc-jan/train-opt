@@ -20,6 +20,8 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		this->verify_juncts();
 		this->verify_levels();
 	}
+
+	this->make_req_ops();
 }
 
 
@@ -296,10 +298,18 @@ void Preprocess::verify_levels() const
 }
 
 
-void Preprocess::make_junction_bounds()
+void Preprocess::make_req_ops()
 {
-	
+	this->is_op_req.set_n_items(this->inst.n_ops());
+
+	for (auto& level : this->levels) {
+		if (level.n_succ() == 1) {
+			this->is_op_req += level.succ[0].op;
+		} 
+	}
 }
+
+
 
 void Preprocess::make_junction_bounds()
 {

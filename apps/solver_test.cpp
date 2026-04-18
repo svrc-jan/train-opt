@@ -16,14 +16,14 @@ int main(int argc, char const *argv[])
 		exit(1);
 	}
 
+	GRBEnv grb_env = GRBEnv();
+	// grb_env.set(GRB_IntParam_OutputFlag, 0);
+
 	string entry(argv[1]);
 
 	Instance inst(entry);
 	Preprocess prepr(inst);
-	Localize local(prepr);
-	Solver slvr(local);
-
-	slvr.get_init_sol();
+	Solver slvr(prepr, grb_env);
 
 	return 0;
 }
