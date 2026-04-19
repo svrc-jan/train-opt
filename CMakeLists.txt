@@ -49,9 +49,6 @@ target_link_libraries(instance_test instance)
 add_executable(preprocess_test apps/preprocess_test.cpp)
 target_link_libraries(preprocess_test preprocess)
 
-add_executable(localize_test apps/localize_test.cpp)
-target_link_libraries(localize_test localize)
-
 add_executable(graph_test apps/graph_test.cpp)
 target_link_libraries(graph_test event_graph)
 

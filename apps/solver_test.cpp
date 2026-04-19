@@ -16,14 +16,24 @@ int main(int argc, char const *argv[])
 		exit(1);
 	}
 
-	GRBEnv grb_env = GRBEnv();
-	// grb_env.set(GRB_IntParam_OutputFlag, 0);
+	GRBEnv grb_env = GRBEnv(true);
+	try {
+		grb_env.set(GRB_IntParam_OutputFlag, 0);
+		// grb_env.set(GRB_IntParam_ThreadLimit, 1);
+	}
+	catch (const GRBException& ex) {
+		cout << "exception: " << ex.getMessage();
+		exit(1);
+	}
+	grb_env.start();
 
 	string entry(argv[1]);
 
 	Instance inst(entry);
 	Preprocess prepr(inst);
 	Solver slvr(prepr, grb_env);
+
+	slvr.solve();
 
 	return 0;
 }

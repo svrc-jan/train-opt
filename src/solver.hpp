@@ -23,9 +23,8 @@ enum State
 class Solver
 {
 public:
-	struct Res_use;
+	struct Route;
 	struct Conflict;
-	struct Obj;
 	struct Var_assign;
 	struct Cycle_cons;
 	struct Path_cons;
@@ -37,12 +36,14 @@ public:
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
 
-	static const idx_t IDX_MAX = Instance::IDX_MAX;
-	static const dur_t DUR_MAX = Instance::DUR_MAX;
-	static const tim_t TIM_MAX = Instance::TIM_MAX;
+	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
+	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
+	static constexpr tim_t TIM_MAX = Instance::TIM_MAX;
 
 	Solver(const Preprocess& prepr, GRBEnv& grb_env);
 	~Solver();
+
+	void solve();
 
 private:
 	GRBEnv& grb_env;
@@ -50,33 +51,44 @@ private:
 
 	double last_obj_val = 0;
 
-	std::vector<Obj> objs = {};
 	std::vector<GRBVar> obj_vars = {};
 	std::vector<tim_t> obj_values = {};
 
 	std::vector<GRBVar> conf_vars = {};
 	std::vector<uint8_t> conf_values = {};
 
+	std::vector<GRBVar> route_vars = {};
+	std::vector<uint8_t> route_values = {};
+	std::vector<idx_t> route_var_idx = {};
+	
 	std::vector<Cycle_cons> cycle_cons = {};
 	std::vector<Path_cons> path_cons = {};
+	std::vector<GRBConstr> route_cons = {};
 
 	Event_graph event_graph;
 
-	std::vector<dur_t> level_dur;
-	std::vector<idx_t> level_res;
+	std::vector<dur_t> level_dur = {};
 
-	std::vector<Res_use*> res_use;
-	std::vector<Res_use> res_use_data;
+	std::vector<std::vector<idx_t>> train_routes = {};
+
+	std::vector<Res_use*> res_use = {};
+	std::vector<Res_use> res_use_data = {};
+	std::vector<std::vector<Res_interval>> res_ints = {};
 
 	std::vector<Conflict> conflicts;
 	std::set<idx_t> assign_set;
 
 	void init_res_use();
+
+
 	void add_train(idx_t t);
+	void add_train_route(idx_t t);
 	void add_train_req_ops(idx_t t);
 	void add_train_level_dur(idx_t t);
-	void add_obj(idx_t level, idx_t inst_idx);
+	void add_train_req_objs(idx_t t);
+	void add_obj(idx_t train, idx_t level, idx_t inst_idx);
 
+	void clear_model();
 	void solve_model();
 	bool update_values();
 
@@ -88,6 +100,16 @@ private:
 	void add_cycle_cons();
 	bool add_obj_cons();
 	bool add_conflict();
+	void freeze_conflicts();
+};
+
+struct Solver::Obj
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	idx_t level = IDX_MAX;
+	uint8_t is_bin = 0;
+	tim_t threshold = 0;
 };
 
 
@@ -98,22 +120,27 @@ struct Solver::Res_use
 	dur_t time = 0;
 };
 
+
+struct Solver::Res_interval
+{
+	idx_t train;
+	idx_t res;
+	Interval<tim_t> tim = {0, TIM_MAX};
+
+	inline bool operator<(const Res_interval& x) const { return tim < x.tim; }
+	inline bool operator==(const Res_interval& x) const { return tim == x.tim; }
+};
+
 struct Solver::Conflict
 {
 	idx_t var = IDX_MAX;
+	idx_t res = IDX_MAX;
 	uint8_t freeze = 0;
 	std::pair<idx_t, idx_t> train = {IDX_MAX, IDX_MAX};
-	std::pair<idx_t, idx_t> res = {IDX_MAX, IDX_MAX};
 };
 
 
-struct Solver::Obj
-{
-	idx_t idx = IDX_MAX;
-	idx_t level = IDX_MAX;
-	uint8_t is_bin = 0;
-	tim_t threshold = 0;
-};
+
 
 
 struct Solver::Var_assign
@@ -160,6 +187,6 @@ inline GRBLinExpr Solver::Var_assign::to_expr(const std::vector<GRBVar>& vars)
 
 inline std::ostream& operator<<(std::ostream& os, const Solver::Var_assign& x)
 {
-	os << "v" << x.idx << "=" << x.value;
+	os << "v" << x.idx << ":" << (uint64_t)x.value;
 	return os;
 }

@@ -69,9 +69,11 @@ private:
 	Flag rec_stack;
 	Flag need_update;
 
+	std::vector<vtx_t> update_stack = {};
+
 	vtx_t cycle_vtx;
 	std::vector<Edge_vertex> cycle_pred = {};
-	Flag time_dirty;
+
 	std::vector<tim_t> _time = {};
 	std::vector<Edge_vertex> time_pred = {};
 
@@ -103,8 +105,8 @@ struct Event_graph::Edge
 
 struct Event_graph::Edge_entry
 {
-	edg_t e = EDG_MAX;
 	vtx_t v = VTX_MAX;
+	edg_t e = EDG_MAX;
 	dur_t d = 0;
 };
 
@@ -121,6 +123,5 @@ struct Event_graph::Edge_vertex
 
 inline Event_graph::tim_t Event_graph::time(vtx_t v)
 {
-	this->update_time(v);
 	return this->_time[v];
 }

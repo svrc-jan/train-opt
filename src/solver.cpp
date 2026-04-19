@@ -1,6 +1,7 @@
 #include "solver.hpp"
 
 #include <cmath>
+#include "utils/stl_print.hpp"
 
 using namespace std;
 
@@ -13,12 +14,15 @@ Solver::Solver(const Preprocess& prepr, GRBEnv& grb_env)
 
 	this->event_graph.set_n_vtx(n_levels);
 
-	this->objs.resize(n_trains);
+	this->objs.reserve(n_trains);
 
-	this->level_dur.resize(n_levels);
-	this->level_res.resize(n_levels);
+	this->level_dur.resize(n_levels, IDX_MAX);
+	
+	this->res_ints.resize(this->inst.n_res, {});
 	
 	this->init_res_use();
+
+	// this->model.set(GRB_IntParam_Presolve, 0);
 }
 
 
@@ -42,11 +46,21 @@ void Solver::init_res_use()
 }
 
 
+void Solver::solve()
+{
+	for (auto t : this->inst.trains_range()) {
+		this->add_train(t);
+	}
+}
+
+
 void Solver::add_train(idx_t t)
 {
 	this->add_train_req_ops(t);
 	this->add_train_level_dur(t);
+	this->add_train_req_objs(t);
 
+	cout << "add train " << t << endl;
 
 	size_t state = STATE_UPDATE_GRAPH;
 
@@ -97,19 +111,30 @@ void Solver::add_train(idx_t t)
 			break;
 		}
 	}
+
+	this->freeze_conflicts();
+	this->clear_model();
+}
+
+
+
+void Solver::add_train_route(idx_t t)
+{
+
 }
 
 
 void Solver::add_train_req_ops(idx_t t)
 {
 	for (auto& level : this->prepr.trains[t].levels) {
-		if (level.n_succ() != 0) {
+		if (level.n_succ() != 1) {
 			continue;
-		} 
+		}
+		
 		idx_t o = level.succ[0].op;
 
 		auto& op = this->inst.ops[o];
-		auto& l_op = this->prepr.op_level[o];
+		auto& l_op = this->prepr.ops[o].level;
 		assert(l_op.start == level.idx && l_op.end == level.idx + 1);
 
 		this->level_dur[level.idx] = op.dur;
@@ -117,21 +142,32 @@ void Solver::add_train_req_ops(idx_t t)
 		if (op.n_res() > 0) {
 			assert(op.n_res() == 1);
 			auto& res = op.res[0];
-			this->level_res[level.idx] = res.idx;
 
 			auto& ru = this->res_use[t][res.idx];
 			ru.level = l_op;
 			ru.time = res.time;
 		}
 
-		if (op.obj < IDX_MAX) {
-			this->add_obj(level.idx, op.obj);
-		}
-
 		this->event_graph.time_lb[level.idx] = op.start_lb;
 	}
 }
 
+
+void Solver::add_train_req_objs(idx_t t)
+{
+	for (auto& level : this->prepr.trains[t].levels) {
+		if (level.n_succ() != 1) {
+			continue;
+		}
+		
+		idx_t o = level.succ[0].op;
+		auto& op = this->inst.ops[o];
+		
+		if (op.obj < IDX_MAX) {
+			this->add_obj(level.train, level.idx, op.obj);
+		}
+	}
+}
 
 void Solver::add_train_level_dur(idx_t t)
 {
@@ -145,7 +181,7 @@ void Solver::add_train_level_dur(idx_t t)
 			idx_t o = succ.op;
 			
 			auto& op = this->inst.ops[o];
-			auto& l_op = this->prepr.op_level[o];
+			auto& l_op = this->prepr.ops[o].level;
 			assert(l_op.start == level.idx && l_op.end == level.idx + 1);
 
 			dur = MIN(dur, op.dur);
@@ -157,12 +193,13 @@ void Solver::add_train_level_dur(idx_t t)
 
 
 
-void Solver::add_obj(idx_t level, idx_t inst_idx)
+void Solver::add_obj(idx_t train, idx_t level, idx_t inst_idx)
 {
 	auto& inst_obj = this->inst.objs[inst_idx];
 
 	Obj obj = {
 		.idx = (idx_t)this->objs.size(),
+		.train = train,
 		.level = level,
 		.is_bin = inst_obj.increment > 0,
 		.threshold = inst_obj.threshold
@@ -184,6 +221,7 @@ void Solver::add_obj(idx_t level, idx_t inst_idx)
 
 void Solver::update_graph()
 {
+	cout << "update graph" << endl;
 	this->event_graph.clear_edges();
 	this->add_dur_edges();
 	this->add_conf_edges();
@@ -196,7 +234,7 @@ void Solver::add_dur_edges()
 		dur_t dur = this->level_dur[l];
 		if (dur < DUR_MAX) {
 			idx_t l_next = l + 1;
-			this->event_graph.add_edge({IDX_MAX, l, l_next, dur});
+			this->event_graph.add_edge({{l, l_next}, IDX_MAX, dur});
 		}
 	}
 }
@@ -205,32 +243,71 @@ void Solver::add_dur_edges()
 void Solver::add_conf_edges()
 {
 	for (auto& conf : this->conflicts) {
-		auto& ru1 = this->res_use[conf.train.first][conf.res.first];
-		auto& ru2 = this->res_use[conf.train.second][conf.res.second];
+		auto& ru1 = this->res_use[conf.train.first][conf.res];
+		auto& ru2 = this->res_use[conf.train.second][conf.res];
 
 		bool order = (conf.var == IDX_MAX) ? conf.freeze : this->conf_values[conf.var];
 		if (order) {
-
-			this->event_graph.add_edge({conf.var, ru1.level.end, ru2.level.start, ru1.time});
+			this->event_graph.add_edge({{ru1.level.end, ru2.level.start}, conf.var, ru1.time});
+		}
+		else {
+			this->event_graph.add_edge({{ru2.level.end, ru1.level.start}, conf.var, ru2.time});
 		}
 	}
 }
 
+
+void Solver::clear_model()
+{
+	cout << "clear model" << endl;
+	for (auto& x : this->cycle_cons) {
+		x.remove_from_model(this->model);
+	}
+	this->cycle_cons.clear();
+
+	for (auto& x : this->path_cons) {
+		x.remove_from_model(this->model);
+	}
+	this->path_cons.clear();
+	
+	for (auto& x : this->conf_vars) {
+		this->model.remove(x);
+	}
+	this->conf_vars.clear();
+	this->conf_values.clear();
+}
+
 void Solver::solve_model()
 {
-	this->model.optimize();
-	if (this->model.get(GRB_IntAttr_Status) != GRB_OPTIMAL) {
-		cout << "ERROR: model infeasible" << endl;
+	cout << "solve model" << endl;
+
+	int status;
+	try {
+		this->model.update();
+		this->model.optimize();
+		status = this->model.get(GRB_IntAttr_Status);
+		if (status == GRB_OPTIMAL) {
+			this->last_obj_val = this->model.get(GRB_DoubleAttr_ObjVal);
+		}
+		
+	}
+	catch (const GRBException& ex) {
+		cout << "ERROR: optimization exception: " << ex.getMessage() << ", code: " << ex.getErrorCode() << endl;
 		exit(1);
 	}
 
-	this->last_obj_val = this->model.get(GRB_DoubleAttr_Obj);
+	if (status != GRB_OPTIMAL) {
+		cout << "ERROR: model optim failed, status: " << status << endl;
+		exit(1);
+	}
 }
 
 
 bool Solver::update_values()
 {
 	bool update_needed = false;
+
+	cout << "update values = ";
 
 	size_t n_vars = this->conf_vars.size();
 	for (size_t i = 0; i < n_vars; i++) {
@@ -250,6 +327,8 @@ bool Solver::update_values()
 		auto& var = this->obj_vars[i];
 		this->obj_values[i] = round(var.get(GRB_DoubleAttr_X));
 	}
+
+	cout << (update_needed ? "true" : "false") << endl;
 
 	return update_needed;
 }
@@ -275,11 +354,16 @@ vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Edg
 
 void Solver::add_cycle_cons()
 {
+	cout << "add cycle cons ";
+
 	auto& cycle = this->event_graph.get_shortest_cycle();
 	
 	Cycle_cons cons;
 
 	cons.assigns = this->collect_assigns(cycle);
+	cout << cons.assigns << endl;
+
+	
 	assert(cons.assigns.size() >= 2);
 
 	cons.add_to_model(this->model, this->conf_vars);
@@ -318,14 +402,23 @@ bool Solver::add_obj_cons()
 	}
 
 	auto& obj = this->objs[max_idx];
-
 	auto& path = this->event_graph.get_critical_path(obj.level);
+
+	cout << "add obj cons t" << obj.train;
+	if (obj.is_bin) {
+		cout << ", bin, ";
+	}
+	else {
+		cout << ", delay " << max_delay << ", ";
+	}
 
 	Path_cons cons;
 	cons.is_bin = obj.is_bin;
 	cons.obj_idx = obj.idx;
 	cons.delay = max_delay;
 	cons.assigns = this->collect_assigns(path);
+
+	cout << cons.assigns << endl;
 
 	cons.add_to_model(this->model, this->conf_vars, this->obj_vars);
 	this->path_cons.push_back(cons);
@@ -335,10 +428,84 @@ bool Solver::add_obj_cons()
 
 
 bool Solver::add_conflict()
-{
+{	
+
+	
+	for (auto& x : this->res_ints) {
+		x.clear();
+	}
+
+	auto res_range = this->inst.res_range();
+	for (auto t : this->inst.trains_range()) {
+		for (auto r : res_range) {
+			auto& ru = this->res_use[t][r];
+
+			if (ru.level.start < IDX_MAX) {			
+				auto& ri = this->res_ints[r];
+				tim_t start = this->event_graph.time(ru.level.start);
+				tim_t end = this->event_graph.time(ru.level.end);
+				ri.push_back({t, r, {start, end}});
+			}
+		}
+	}
+
+	tim_t earliest = TIM_MAX;
 	Conflict conf;
 
-	return false;
+	for (auto ri : this->res_ints) {
+		sort(ri.begin(), ri.end());
+
+		size_t ri_size = ri.size();
+		for (size_t i = 0; i + 1 < ri_size; i++) {
+			auto& a = ri[i];
+			auto& b = ri[i+1];
+
+			if (b.tim.start >= earliest) {
+				break;
+			}
+
+			if (a.tim.end > b.tim.end) {
+				conf.res = a.res;
+				if (a.train < b.train) {
+					conf.train = {a.train, b.train};
+				}
+				else {
+					conf.train = {b.train, a.train};
+				}
+
+				earliest = b.tim.end;
+				break;
+			}
+		}
+	}
+
+	if (earliest == TIM_MAX) {
+		return false;
+	}
+
+	
+	conf.var = this->conf_vars.size();
+	this->conflicts.push_back(conf);
+
+	cout << "add conflict " << conf.res << " : " << conf.train << ", v" << conf.var << endl; 
+
+	
+	auto var = this->model.addVar(0, 1, 0, GRB_BINARY);
+	this->conf_vars.push_back(var);
+	this->conf_values.push_back(0);
+
+
+	return true;
+}
+
+void Solver::freeze_conflicts()
+{
+	for (auto& x : this->conflicts) {
+		if (x.var < IDX_MAX) {
+			x.freeze = this->conf_values[x.var];
+			x.var = IDX_MAX;
+		}
+	}
 }
 
 
@@ -381,12 +548,14 @@ void Solver::Path_cons::add_to_model(GRBModel& model,
 		expr += x.to_expr(conf_vars);
 	}
 
+	size_t n_assigns = this->assigns.size();
+
 	auto& obj_var = obj_vars[this->obj_idx];
 	if (this->is_bin) {
-		this->model_cons = model.addConstr(expr <= obj_var);
+		this->model_cons = model.addConstr((expr - n_assigns + 1) <= obj_var);
 	}
 	else {
-		this->model_cons = model.addConstr(expr*this->delay <= obj_var);
+		this->model_cons = model.addConstr((expr - n_assigns + 1)*this->delay <= obj_var);
 	}
 	
 	this->in_model = true;

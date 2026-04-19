@@ -24,10 +24,11 @@ void Event_graph::set_n_vtx(const size_t n_vtx)
 	this->rec_stack.set_n_items(n_vtx);
 	this->need_update.set_n_items(n_vtx);
 
+	this->update_stack.reserve(n_vtx);
+
 	this->cycle_pred.resize(n_vtx);
 	this->shortest_cycle.resize(n_vtx);
 
-	this->time_dirty.set_n_items(n_vtx);
 	this->time_lb.resize(n_vtx, 0);
 	this->_time.resize(n_vtx);
 	this->time_pred.resize(n_vtx);
@@ -36,8 +37,10 @@ void Event_graph::set_n_vtx(const size_t n_vtx)
 
 void Event_graph::add_edge(const Edge& x)
 {
-	this->edges_in[x.v.end].push_back({x.e, x.v.start, x.d});
-	this->edges_out[x.v.start].push_back({x.e, x.v.end, x.d});
+	assert(x.v.start < this->n_vtx && x.v.end < this->n_vtx);
+
+	this->edges_in[x.v.end].push_back({x.v.start, x.e, x.d});
+	this->edges_out[x.v.start].push_back({x.v.end, x.e, x.d});
 
 	this->need_update += x.v.end;
 }
@@ -152,6 +155,7 @@ bool Event_graph::update()
 
 	this->visited.clear();
 	this->rec_stack.clear();
+	this->update_stack.clear();
 	this->cycle_vtx = VTX_MAX;
 
 	for (vtx_t v : need_list) {
@@ -160,7 +164,9 @@ bool Event_graph::update()
 		}
 	}
 
-	this->time_dirty.set_true(this->visited);
+	for (vtx_t v : this->update_stack | views::reverse) {
+		this->update_time(v);
+	}
 
 	return false;
 }
@@ -187,6 +193,7 @@ bool Event_graph::get_cycle_rec(vtx_t v)
 	}
 
 	this->rec_stack -= v;
+	this->update_stack.push_back(v);
 
 	return false;
 }
@@ -195,21 +202,22 @@ bool Event_graph::get_cycle_rec(vtx_t v)
 
 void Event_graph::update_time(vtx_t v)
 {
-	if (!this->time_dirty[v]) {
-		return;
-	}
-	
+	assert(this->visited[v]);
+
 	this->_time[v] = this->time_lb[v];
 	this->time_pred[v] = Edge_vertex();
 
-	for (auto& x : edges_in[v]) {
-		this->update_time(x.v);
+	for (auto& x : this->edges_in[v]) {
+		assert(!this->visited[x.v]);
+
 		tim_t new_time = this->_time[x.v] + (tim_t)x.d;
 		if (this->_time[v] < new_time) {
 			this->_time[v] = new_time;
 			this->time_pred[v] = x;
 		}
 	}
+
+	this->visited -= v;
 }
 
 
@@ -262,14 +270,14 @@ const vector<Event_graph::Edge_vertex>& Event_graph::get_critical_path(vtx_t sta
 	ret.clear();
 
 	vtx_t v = start;
-	do {
+	while (true) {
 		auto pred = this->time_pred[v];
+		if (pred.v == VTX_MAX) {
+			break;
+		}
 		ret.push_back(pred);
 		v = pred.v;
-		assert(v < this->n_vtx);
-	} while(v != start);
+	};
 
 	return ret;
-
-
 }

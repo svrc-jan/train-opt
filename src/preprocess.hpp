@@ -1,5 +1,7 @@
 #pragma once
 
+#include <queue>
+
 #include "utils/flag.hpp"
 #include "utils/interval.hpp"
 #include "instance.hpp"
@@ -9,8 +11,10 @@ class Preprocess
 {
 public:
 	struct Op;
+	struct Route;
 	struct Junction;
 	struct Level;
+	struct Obj;
 	struct Train;
 
 	struct Idx_op;
@@ -27,12 +31,13 @@ public:
 
 	const Instance& inst;
 
-	std::vector<Interval<idx_t>> op_junct = {};
-	std::vector<Interval<idx_t>> op_level = {};
-
+	std::vector<Op> ops = {};
+	std::vector<Route> routes = {};
 	std::vector<Junction> juncts = {};
-	std::vector<Train> trains = {};
 	std::vector<Level> levels = {};
+	std::vector<Obj> objs = {};
+	std::vector<Train> trains = {};
+	
 
 	Flag is_res_req;
 	Flag is_res_opt;
@@ -42,10 +47,14 @@ public:
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
 	
+	METHOD_N(ops)
+	METHOD_N(routes)
 	METHOD_N(juncts)
 	METHOD_N(levels)
 	METHOD_N(trains)
 
+	METHOD_RANGE(ops, idx_t)
+	METHOD_RANGE(routes, idx_t)
 	METHOD_RANGE(juncts, idx_t)
 	METHOD_RANGE(levels, idx_t)
 	METHOD_RANGE(trains, idx_t)
@@ -58,7 +67,11 @@ private:
 	std::vector<Idx_op> level_succ = {};
 	std::vector<Idx_op> level_pred = {};
 
+	std::vector<idx_t> ops_req = {};
+	std::vector<idx_t> route_ops = {};
+
 	Flag is_op_req;
+	Flag is_level_req;
 
 	std::vector<cnt_t> op_count = {};
 	std::vector<cnt_t*> res_count = {};
@@ -66,13 +79,18 @@ private:
 
 	std::vector<idx_t> level_res = {};
 
+	std::queue<idx_t> que;
+
 	void make_junctions();
 	void make_levels();
 
 	void verify_juncts() const;
 	void verify_levels() const;
 
+	void make_req_levels();
 	void make_req_ops();
+	void make_routes();
+	void make_junct_route();
 
 	void make_junction_bounds();
 	void make_level_bounds();
@@ -85,13 +103,35 @@ private:
 	void make_global_res();
 
 	void make_directions();
+
+	
 };
+
+
+struct Preprocess::Op
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	idx_t route = IDX_MAX;
+	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+};
+
+
+struct Preprocess::Route
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	Array<idx_t> ops;
+};
+
 
 struct Preprocess::Junction
 {
 	idx_t idx = IDX_MAX;
 	idx_t level = IDX_MAX;
 	idx_t train = IDX_MAX;
+	uint8_t req_route_cons = 0;
 
 	tim_t time_lb = 0;
 	tim_t time_ub = TIM_MAX;
@@ -108,6 +148,7 @@ struct Preprocess::Level
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
+	uint8_t is_req = 1;
 
 	tim_t time_lb = 0;
 	tim_t time_ub = TIM_MAX;
@@ -129,24 +170,32 @@ struct Preprocess::Level
 struct Preprocess::Train
 {
 	idx_t idx = IDX_MAX;
+
+	idx_t op_first = IDX_MAX;
+	idx_t route_first = IDX_MAX;
 	idx_t junct_first = IDX_MAX;
 	idx_t level_first = IDX_MAX;
-
+	
+	Array<Op> ops;
+	Array<idx_t> ops_req;
+	Array<Route> routes;
 	Array<Junction> juncts; 
 	Array<Level> levels;
-
-	Flag is_res_req;
-	Flag is_res_opt;
-
-	OPERATOR_IDX(idx_t)
 	
-	METHOD_AFTER(junct)
-	METHOD_LAST(junct)
+	METHOD_N(ops)
+	METHOD_N(routes)
 	METHOD_N(juncts)
-
-	METHOD_AFTER(level)
-	METHOD_LAST(level)
 	METHOD_N(levels)
+
+	METHOD_AFTER(op)
+	METHOD_AFTER(route)
+	METHOD_AFTER(junct)
+	METHOD_AFTER(level)
+
+	METHOD_LAST(op)
+	METHOD_LAST(route)
+	METHOD_LAST(junct)
+	METHOD_LAST(level)
 
 	auto levels_range() const { return Range<idx_t>(level_first, level_after()); }
 };

@@ -25,6 +25,8 @@ int main(int argc, char const *argv[])
 			cout << entry << endl;
 			Instance inst(entry);
 			Preprocess prepr(inst, true);
+
+			cout << "routes / ops : " << prepr.n_routes() << " / " << prepr.n_ops() << endl;
 		}
 	}
 	else {
