@@ -16,7 +16,7 @@ class Event_graph
 
 public:
 	struct Edge;
-	struct Edge_vertex;
+	struct Vertex_edge;
 
 	typedef uint16_t edg_t;
 	typedef uint16_t vtx_t;
@@ -28,10 +28,11 @@ public:
 	static constexpr dur_t DUR_MAX = std::numeric_limits<dur_t>::max();
 	static constexpr tim_t TIM_MAX = std::numeric_limits<tim_t>::max();
 
+	std::vector<tim_t> time = {};
 	std::vector<tim_t> time_lb = {};
 	
-	std::vector<Edge_vertex> shortest_cycle = {};
-	std::vector<Edge_vertex> critical_path = {};
+	std::vector<Vertex_edge> shortest_cycle = {};
+	std::vector<Vertex_edge> critical_path = {};
 
 	Event_graph(const size_t n_vtx=0);
 	~Event_graph() {}
@@ -39,10 +40,12 @@ public:
 	void set_n_vtx(size_t n_vtx);
 
 	void add_edge(const Edge& e);
-	bool set_edge_by_idx(const Edge& e, size_t idx);
+	bool remove_edge(const Edge& e);
+	bool update_edge(const Edge& e_old, const Edge& e_new);
+
 	void add_edges(const std::vector<Edge>& edges);
-	
 	void clear_edges();
+
 	void remove_last_edges(const std::vector<Edge>& edges);
 	void remove_last_edges_small(const std::vector<Edge>& edges);
 
@@ -50,13 +53,11 @@ public:
 
 	/* return true if cycle */
 	bool update();
-	const std::vector<Edge_vertex>& get_shortest_cycle(vtx_t start);
-	const std::vector<Edge_vertex>& get_critical_path(vtx_t end);
+	const std::vector<Vertex_edge>& get_shortest_cycle(vtx_t start);
+	const std::vector<Vertex_edge>& get_critical_path(vtx_t end);
 
-	inline const std::vector<Edge_vertex>& get_shortest_cycle()
+	inline const std::vector<Vertex_edge>& get_shortest_cycle()
 	{ return get_shortest_cycle(cycle_vtx); }
-
-	inline tim_t time(vtx_t v);
 	
 private:
 	struct Edge_entry;
@@ -72,14 +73,12 @@ private:
 	std::vector<vtx_t> update_stack = {};
 
 	vtx_t cycle_vtx;
-	std::vector<Edge_vertex> cycle_pred = {};
+	std::vector<Vertex_edge> cycle_pred = {};
 
-	std::vector<tim_t> _time = {};
-	std::vector<Edge_vertex> time_pred = {};
+	std::vector<Vertex_edge> time_pred = {};
 
 	std::queue<vtx_t> que;
-	
-	Edge_entry* get_edge_entry(const Edge& e);
+
 
 	bool get_cycle_rec(vtx_t v);
 	void update_time(vtx_t v);
@@ -88,40 +87,39 @@ private:
 
 struct Event_graph::Edge
 {
-	Interval<vtx_t> v;
-	edg_t e = EDG_MAX;
+	Interval<vtx_t> v = {VTX_MAX, VTX_MAX};
 	dur_t d = 0;
+	edg_t e = EDG_MAX;
 
 	inline bool operator<(const Edge& x) const 
 	{ return LEX_LT3(v.start, v.end, d, x.v.start, x.v.end, x.d); }
 
 	inline bool operator==(const Edge& x) const
-	{ return LEX_EQ3(v.start, v.end, d, x.v.start, x.v.end, x.d); }
+	{ return (v.start == x.v.start) && (v.end == x.v.end) && (d == x.d) && (e == x.e); }
 
 	inline bool operator!=(const Edge& x) const
 	{ return !(*this == x); }
+
+	inline Edge_entry to_in() const { return {v.end, d, e}; }
+	inline Edge_entry to_out() const { return {v.start, d, e}; }
 };
 
 
 struct Event_graph::Edge_entry
 {
 	vtx_t v = VTX_MAX;
-	edg_t e = EDG_MAX;
 	dur_t d = 0;
-};
-
-
-struct Event_graph::Edge_vertex
-{
 	edg_t e = EDG_MAX;
-	vtx_t v = VTX_MAX;
-
-	Edge_vertex() : e(EDG_MAX), v(EDG_MAX) {}
-	Edge_vertex(edg_t e, vtx_t v) : e(e), v(v) {}
-	Edge_vertex(const Edge_entry& x) : e(x.e), v(x.v) {}
 };
 
-inline Event_graph::tim_t Event_graph::time(vtx_t v)
+
+
+struct Event_graph::Vertex_edge
 {
-	return this->_time[v];
-}
+	vtx_t v = VTX_MAX;
+	edg_t e = EDG_MAX;
+
+	Vertex_edge() : v(VTX_MAX), e(EDG_MAX) {}
+	Vertex_edge(vtx_t v, edg_t e) : v(v), e(e) {}
+	Vertex_edge(const Edge_entry& x) : v(x.v), e(x.e) {}
+};

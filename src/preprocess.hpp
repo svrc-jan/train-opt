@@ -14,6 +14,7 @@ public:
 	struct Route;
 	struct Junction;
 	struct Level;
+	struct Chunk;
 	struct Obj;
 	struct Train;
 
@@ -31,14 +32,14 @@ public:
 
 	const Instance& inst;
 
-	std::vector<Op> ops = {};
-	std::vector<Route> routes = {};
+	std::vector<Op> 	  ops 	 = {};
+	std::vector<Route> 	  routes = {};
 	std::vector<Junction> juncts = {};
-	std::vector<Level> levels = {};
-	std::vector<Obj> objs = {};
-	std::vector<Train> trains = {};
+	std::vector<Level> 	  levels = {};
+	std::vector<Chunk>	  chunks = {};
+	std::vector<Obj> 	  objs 	 = {};
+	std::vector<Train> 	  trains = {};
 	
-
 	Flag is_res_req;
 	Flag is_res_opt;
 	Flag is_res_split;
@@ -51,19 +52,24 @@ public:
 	METHOD_N(routes)
 	METHOD_N(juncts)
 	METHOD_N(levels)
+	METHOD_N(chunks)
+	METHOD_N(objs)
 	METHOD_N(trains)
+	
 
 	METHOD_RANGE(ops, idx_t)
 	METHOD_RANGE(routes, idx_t)
 	METHOD_RANGE(juncts, idx_t)
 	METHOD_RANGE(levels, idx_t)
+	METHOD_RANGE(chunks, idx_t)
+	METHOD_RANGE(objs, idx_t)
 	METHOD_RANGE(trains, idx_t)
 	
 private:
 	std::vector<Idx_op> junct_succ = {};
 	std::vector<Idx_op> junct_pred = {};
 
-	std::vector<idx_t> level_juncts = {};
+	std::vector<idx_t>  level_juncts = {};
 	std::vector<Idx_op> level_succ = {};
 	std::vector<Idx_op> level_pred = {};
 
@@ -89,22 +95,14 @@ private:
 
 	void make_req_levels();
 	void make_req_ops();
+
 	void make_routes();
-	void make_junct_route();
+	void make_route_junct_level();
+	void make_objs();
 
 	void make_junction_bounds();
 	void make_level_bounds();
 	void make_resource_chunks();
-
-	void make_count();
-	void make_level_res();
-	void make_reentry_res();
-	void make_train_res();
-	void make_global_res();
-
-	void make_directions();
-
-	
 };
 
 
@@ -113,8 +111,11 @@ struct Preprocess::Op
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
 	idx_t route = IDX_MAX;
+	idx_t chunk = IDX_MAX;
+
 	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	const Instance::Op* inst = nullptr;
 };
 
 
@@ -122,6 +123,8 @@ struct Preprocess::Route
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
+	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
 	Array<idx_t> ops;
 };
 
@@ -129,6 +132,7 @@ struct Preprocess::Route
 struct Preprocess::Junction
 {
 	idx_t idx = IDX_MAX;
+
 	idx_t level = IDX_MAX;
 	idx_t train = IDX_MAX;
 	uint8_t req_route_cons = 0;
@@ -167,6 +171,34 @@ struct Preprocess::Level
 };
 
 
+struct Preprocess::Chunk
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	idx_t res = IDX_MAX;
+	idx_t time = 0;
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+};
+
+struct Preprocess::Obj
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	idx_t route = IDX_MAX;
+	idx_t level = IDX_MAX;
+	uint8_t is_bin = 0;
+	uint8_t coeff = 0;
+	uint8_t n_routes = 1;
+	tim_t threshold = 0;
+
+	inline bool operator==(const Obj& x)
+	{
+		return (level == x.level) && (is_bin == x.is_bin) &&
+			(coeff == x.coeff) && (threshold == x.threshold);
+	}
+};
+
+
 struct Preprocess::Train
 {
 	idx_t idx = IDX_MAX;
@@ -176,11 +208,14 @@ struct Preprocess::Train
 	idx_t junct_first = IDX_MAX;
 	idx_t level_first = IDX_MAX;
 	
-	Array<Op> ops;
-	Array<idx_t> ops_req;
-	Array<Route> routes;
+	Array<Op> 		ops;
+	Array<idx_t> 	ops_req;
+	Array<Route> 	routes;
 	Array<Junction> juncts; 
-	Array<Level> levels;
+	Array<Level> 	levels;
+	Array<Obj> 		objs;
+
+	const Instance::Train* inst = nullptr;
 	
 	METHOD_N(ops)
 	METHOD_N(routes)

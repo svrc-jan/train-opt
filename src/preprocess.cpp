@@ -24,7 +24,8 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 	this->make_req_levels();
 	this->make_req_ops();
 	this->make_routes();
-	this->make_junct_route();
+	this->make_route_junct_level();
+	this->make_objs();
 }
 
 
@@ -40,27 +41,28 @@ void Preprocess::make_junctions()
 	size_t n_trains = this->inst.n_trains();
 
 	this->ops.resize(n_ops);
-	for (auto o : this->inst.ops_range()) {
-		this->ops[o].idx = o;
+	for (auto o : this->ops_range()) {
+		auto& op = this->ops[o];
+		op.idx = o;
+		op.inst = &this->inst.ops[o];
 	}
 
 	this->trains.resize(n_trains, Train());
 
 	size_t junct_idx = 0;
 
-	for (size_t t = 0; t < n_trains; t++) {
-
-		auto& inst_train = this->inst.trains[t];
+	for (auto t : this->trains_range()) {
 		auto& train = this->trains[t];
 		train.idx = t;
+		train.inst = &this->inst.trains[t];
 
-		Disjoint_set disj_set(inst_train.ops.size());
+		Disjoint_set disj_set(train.inst->ops.size());
 
-		idx_t o_first = inst_train.op_first;
+		idx_t o_first = train.inst->op_first;
 		train.ops.set_begin(&this->ops[o_first]);
-		train.ops.set_size(inst_train.n_ops());
+		train.ops.set_size(train.inst->n_ops());
 
-		for (auto& op : inst_train.ops) {
+		for (auto& op : train.inst->ops) {
 			for (auto it_a = op.succ.begin(); it_a < op.succ.end(); it_a++) {
 				for (auto it_b = it_a + 1; it_b < op.succ.end(); it_b++) {
 					int a = *it_a - o_first;
@@ -80,16 +82,16 @@ void Preprocess::make_junctions()
 		}
 
 		train.juncts.set_size(disj_set.n_sets + 1);
-		this->ops[inst_train.op_last()].junct.end = train.junct_last();	
+		this->ops[train.inst->op_last()].junct.end = train.junct_last();
 
 		junct_idx += train.juncts.size();
 	}
 
-	for (auto& op : this->inst.ops) {
-		auto& j_op = this->ops[op.idx].junct;
+	for (auto& op : this->ops) {
+		auto& j_op = op.junct;
 		assert(j_op.start < junct_idx);
 
-		for (int p : op.pred) {
+		for (int p : op.inst->pred) {
 			auto& j_pred = this->ops[p].junct;
 			if (j_pred.end == IDX_MAX) {
 				j_pred.end = j_op.start;
@@ -145,7 +147,7 @@ void Preprocess::make_junctions()
 
 void Preprocess::verify_juncts() const
 {
-	for (idx_t j = 0; j < this->n_juncts(); j++) {
+	for (auto j : this->juncts_range()) {
 		auto& junct = this->juncts[j];
 		assert(junct.idx == j);
 
@@ -363,26 +365,24 @@ void Preprocess::make_routes()
 
 	auto& q = this->que;
 	
-	for (auto& train_i : this->inst.trains) {
-		auto& train = this->trains[train_i.idx];
+	for (auto& train : this->trains) {
 		assert(q.empty());
 
-		idx_t o_first = train_i.op_first;
+		idx_t o_first = train.inst->op_first;
 		q.push(o_first);
 
 		train.route_first = route_idx;
 
 		while (!q.empty()) {
 			idx_t o = q.front(); q.pop();
-			auto& op_i = this->inst.ops[o];
 			auto& op = this->ops[o];
 
-			size_t n_pred = op_i.n_pred();
+			size_t n_pred = op.inst->n_pred();
 			if (this->is_op_req[o]) {
 				op.route = IDX_MAX;
 			}
 			else if (n_pred == 1) {
-				idx_t p = op_i.pred[0];
+				idx_t p = op.inst->pred[0];
 				auto& op_p = this->inst.ops[p];
 				if (op_p.n_succ() == 1) {
 					op.route = this->ops[p].route;
@@ -395,7 +395,7 @@ void Preprocess::make_routes()
 				op.route = route_idx++;
 			}
 
-			for (auto s : op_i.succ) {
+			for (auto s : op.inst->succ) {
 				in_deg[s] -= 1;
 				if (in_deg[s] == 0) {
 					q.push(s);
@@ -454,24 +454,81 @@ void Preprocess::make_routes()
 }
 
 
-void Preprocess::make_junct_route()
+void Preprocess::make_route_junct_level()
 {
-	for (auto& junct : this->juncts) {
-		junct.req_route_cons = false;
-		for (auto& pred : junct.pred) {
-			auto& op_i = this->inst.ops[pred.op];
-			auto& op_p = this->ops[pred.op];
+	for (auto& route : this->routes) {
+		auto& op_first = this->ops[route.ops[0]];
+		auto& op_last = this->ops[route.ops.back()];
 
-			for (auto s : op_i.succ) {
-				auto& op_s = this->ops[s];
-				if (op_p.route != op_s.route) {
-					junct.req_route_cons = true;
-				}
-			}
+		route.junct.start = op_first.junct.start;
+		route.level.start = op_first.level.start;
+		
+		route.junct.end = op_last.junct.end;
+		route.level.end = op_last.junct.end;
+
+		this->juncts[route.junct.start].req_route_cons = true;
+		this->juncts[route.junct.end].req_route_cons = true;
+	}
+}
+
+
+void Preprocess::make_resource_chunks()
+{
+	size_t chunk_idx = 0;
+	
+	for (auto& op : this->ops) {
+		if (op.inst->n_res() > 0) {
+			// assert(op.inst->n_res() == 1);
 		}
 	}
 }
 
+
+void Preprocess::make_objs()
+{
+	this->objs.clear();
+	
+	vector<Obj> train_obj;
+
+	for (auto& train : this->trains) {
+		train_obj.clear();
+
+		for (auto& op : train.ops) {
+			auto& op_i = this->inst.ops[op.idx];
+			if (op_i.obj == IDX_MAX) {
+				continue;
+			}
+
+			auto& obj_i = this->inst.objs[op_i.obj];
+			Obj obj = {
+				.train = train.idx,
+				.route = op.route,
+				.level = op.level.start,
+				.is_bin = (obj_i.increment > 0),
+				.coeff = (obj_i.increment > 0) ? obj_i.increment : obj_i.coeff,
+				.n_routes = 1,
+				.threshold = obj_i.threshold
+			};
+
+			auto it = find(train_obj.rbegin(), train_obj.rend(), obj);
+			if (it == train_obj.rend()) {
+				train_obj.push_back(obj);
+			}
+			else {
+				it->route = IDX_MAX;
+				it->n_routes += 1;
+			}
+		}
+
+		train.objs.set_size(train_obj.size());
+		this->objs.insert(this->objs.end(), train_obj.begin(), train_obj.end());
+	}
+
+	size_t obj_idx = 0;
+	for (auto& train : this->trains) {
+		train.objs.assign_offset(this->objs, obj_idx, false);
+	}
+}
 
 
 
@@ -506,170 +563,4 @@ void Preprocess::make_junction_bounds()
 void Preprocess::make_level_bounds()
 {
 
-}
-
-
-void Preprocess::make_count()
-{
-	size_t n_levels = this->n_levels();
-
-	this->op_count.resize(n_levels, 0);
-	this->res_count.resize(n_levels, nullptr);
-	this->res_count_data.resize(n_levels*this->inst.n_res, 0);
-
-	for (auto l : this->levels_range()) {
-		this->res_count[l] = &this->res_count_data[l*this->inst.n_res];
-	}
-
-	for (auto& op : this->inst.ops) {
-		for (auto l : this->ops[op.idx].level.range()) {
-			
-			assert(this->op_count[l] < CNT_MAX);
-			this->op_count[l] += 1;
-			
-			for (auto& res : op.res) {
-				this->res_count[l][res.idx] += 1;
-			}
-		}
-	}
-}
-
-
-
-void Preprocess::make_level_res()
-{
-	size_t res_idx = 0;
-	
-	for (auto& level : this->levels) {
-		level.res.set_size(0);
-		level.res_req.set_size(0);
-		level.res_opt.set_size(0);
-
-		cnt_t o_cnt = this->op_count[level.idx];
-		for (auto r : this->inst.res_range()) {
-			cnt_t r_cnt = this->res_count[level.idx][r];
-			
-			if (r_cnt > 0) {
-				level.res.increment_size(1);
-				res_idx += 1;
-
-				if (r_cnt == o_cnt) {
-					level.res_req.increment_size(1);
-				}
-				else {
-					assert(r_cnt < o_cnt);
-					level.res_opt.increment_size(1);
-				}
-			}
-		}
-	}
-
-	this->level_res.resize(res_idx);
-	res_idx = 0;
-	
-	for (auto& level : this->levels) {
-		level.res.assign_offset(this->level_res, res_idx, false);
-		
-		level.res_req.set_begin(level.res.begin());
-		level.res_opt.set_begin(level.res.begin() + level.res_req.size(), false);
-
-		level.res_req.clear();
-		level.res_opt.clear();
-
-		cnt_t o_cnt = this->op_count[level.idx];
-		for (auto r : this->inst.res_range()) {
-			cnt_t r_cnt = this->res_count[level.idx][r];
-			
-			if (r_cnt > 0) {
-				if (r_cnt == o_cnt) {
-					level.res_req.push_back(r);
-				}
-				else {
-					level.res_opt.push_back(r);
-				}	
-			}
-		}
-
-		assert(level.res_req.size() + level.res_opt.size() == level.res.size());
-		assert(level.res.end() == level.res_opt.end());
-	}
-}
-
-
-void Preprocess::make_reentry_res()
-{
-	Flag res_entered(this->inst.n_res);
-	Flag train_reentries(this->inst.n_res);
-
-	vector<pair<pair<idx_t, idx_t>, idx_t>> reentries;
-
-	for (auto& train : this->trains) {
-		res_entered.clear();
-
-		for (auto level : train.levels) {
-			for (auto r : level.res) {
-				if (res_entered[r] && this->levels[level.idx - 1].res.find(r) == nullptr) {
-					reentries.push_back({{train.idx, level.idx}, r});
-					train_reentries += train.idx;
-				}
-				res_entered += r;
-			}
-		}
-	}
-
-	for (auto t : train_reentries.get_true_list()) {
-		for (auto& level : this->trains[t].levels) {
-			cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_opt << endl;
-		}
-	}
-
-	cout << "res reentries: " << reentries << endl;
-}
-
-
-
-void Preprocess::make_train_res()
-{
-	// for (auto& train : this->trains) {
-	// 	train.is_res_req.set_n_items(this->inst.n_res);
-	// 	train.is_res_opt.set_n_items(this->inst.n_res);
-
-	// 	for (auto& level : train.levels) {
-	// 		for (auto& r : level.res_req) {
-	// 			train.is_res_req += r;
-	// 		}
-	// 		for (auto& r : level.res_opt) {
-	// 			train.is_res_opt += r;
-	// 		}
-	// 	}
-
-	// 	train.is_res_opt.set_false(train.is_res_req);
-
-	// 	for (auto r : this->inst.res_range()) {
-	// 		assert(train.is_res_req[r] + train.is_res_opt[r] <= 1);
-	// 	}
-	// }
-}
-
-
-void Preprocess::make_global_res()
-{
-	this->is_res_req.set_n_items(this->inst.n_res);
-	this->is_res_opt.set_n_items(this->inst.n_res);
-	this->is_res_split.set_n_items(this->inst.n_res);
-
-	for (auto& train : this->trains) {
-		// this->is_res_req.set_true(train.is_res_req);
-		// this->is_res_opt.set_true(train.is_res_opt);
-	}
-
-	this->is_res_split.set_true(this->is_res_req);
-	this->is_res_split.mask(this->is_res_opt);
-
-	this->is_res_req.set_false(this->is_res_split);
-	this->is_res_opt.set_false(this->is_res_split);
-
-	for (auto r : this->inst.res_range()) {
-		assert(this->is_res_req[r] + this->is_res_opt[r] + this->is_res_split[r] == 1);
-	}
 }

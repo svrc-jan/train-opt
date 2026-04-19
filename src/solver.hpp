@@ -10,23 +10,28 @@
 #include "event_graph.hpp"
 
 
-enum State
+enum Solver_state
 {
-	STATE_DONE,
-	STATE_SOLVE_MODEL,
-	STATE_UPDATE_GRAPH,
-	STATE_UPDATE_OBJ,
-	STATE_FIND_CONFLICT
+	SLVR_DONE,
+	SLVR_FAIL,
+	SLVR_OPTIMIZE_MODEL,
+	SLVR_UPDATE_VALUES,
+	SLRV_UPDATE_GRAPH,
+	SLVR_UPDATE_OBJ,
+	SLVR_ADD_CONFLICT
 };
-
 
 class Solver
 {
 public:
+	struct Obj;
 	struct Route;
+	struct Chunk;
+
 	struct Conflict;
 	struct Var_assign;
 	struct Cycle_cons;
+	struct Route_cons;
 	struct Path_cons;
 
 	const Instance& inst;
@@ -36,9 +41,16 @@ public:
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
 
+	typedef Event_graph::edg_t edg_t; 
+	typedef Event_graph::vtx_t vtx_t; 
+	typedef Event_graph::Edge Edge;
+
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
 	static constexpr tim_t TIM_MAX = Instance::TIM_MAX;
+
+	static constexpr edg_t EDG_MAX = Event_graph::EDG_MAX;
+	static constexpr vtx_t VTX_MAX = Event_graph::VTX_MAX;
 
 	Solver(const Preprocess& prepr, GRBEnv& grb_env);
 	~Solver();
@@ -49,144 +61,135 @@ private:
 	GRBEnv& grb_env;
 	GRBModel model = nullptr;
 
-	double last_obj_val = 0;
+	double obj_val = 0;
 
-	std::vector<GRBVar> obj_vars = {};
-	std::vector<tim_t> obj_values = {};
+	enum Solver_state state;
 
-	std::vector<GRBVar> conf_vars = {};
-	std::vector<uint8_t> conf_values = {};
+	size_t n_routes = 0;
+	std::vector<Obj> objs = {};
+	std::vector<Route> routes = {};
+	std::vector<Conflict> conflicts = {};
 
-	std::vector<GRBVar> route_vars = {};
-	std::vector<uint8_t> route_values = {};
-	std::vector<idx_t> route_var_idx = {};
-	
+	std::vector<std::vector<Chunk>> chunks = {};
+
+	std::vector<GRBConstr> route_cons = {};
 	std::vector<Cycle_cons> cycle_cons = {};
 	std::vector<Path_cons> path_cons = {};
-	std::vector<GRBConstr> route_cons = {};
 
 	Event_graph event_graph;
 
-	std::vector<dur_t> level_dur = {};
+	idx_t curr_train = IDX_MAX;
 
-	std::vector<std::vector<idx_t>> train_routes = {};
+	std::set<edg_t> assign_set;
 
-	std::vector<Res_use*> res_use = {};
-	std::vector<Res_use> res_use_data = {};
-	std::vector<std::vector<Res_interval>> res_ints = {};
-
-	std::vector<Conflict> conflicts;
-	std::set<idx_t> assign_set;
-
-	void init_res_use();
+	void init_data();
+	void init_objs();
+	void init_routes();
 
 
-	void add_train(idx_t t);
-	void add_train_route(idx_t t);
-	void add_train_req_ops(idx_t t);
-	void add_train_level_dur(idx_t t);
-	void add_train_req_objs(idx_t t);
-	void add_obj(idx_t train, idx_t level, idx_t inst_idx);
+	void solver_loop();
+	
+	void optimize_model();
 
-	void clear_model();
-	void solve_model();
-	bool update_values();
-
+	void update_values();
+	
 	void update_graph();
-	void add_dur_edges();
-	void add_conf_edges();
-
-	std::vector<Var_assign> collect_assigns(const std::vector<Event_graph::Edge_vertex>& path);
+	bool update_route_edges();
+	bool update_conf_edges();
 	void add_cycle_cons();
+	
+
+	void update_objs();
 	bool add_obj_cons();
+	
+	void clear_model();
+
 	bool add_conflict();
 	void freeze_conflicts();
+
+	std::vector<Var_assign> collect_assigns(
+		const std::vector<Event_graph::Vertex_edge>& path);
+	
 };
 
 struct Solver::Obj
 {
-	idx_t idx = IDX_MAX;
-	idx_t train = IDX_MAX;
-	idx_t level = IDX_MAX;
-	uint8_t is_bin = 0;
-	tim_t threshold = 0;
+	tim_t value = 0;
+	GRBVar var;
+	const Preprocess::Obj* prepr;
 };
 
 
-struct Solver::Res_use
+struct Solver::Route
 {
-	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
-	idx_t train = IDX_MAX;
-	dur_t time = 0;
-};
+	uint8_t value = 0;
+	uint8_t in_graph = 0;
+	uint8_t in_model = 0;
+	GRBVar var;
 
-
-struct Solver::Res_interval
-{
-	idx_t train;
-	idx_t res;
-	Interval<tim_t> tim = {0, TIM_MAX};
-
-	inline bool operator<(const Res_interval& x) const { return tim < x.tim; }
-	inline bool operator==(const Res_interval& x) const { return tim == x.tim; }
+	const Preprocess::Route* prepr;
 };
 
 struct Solver::Conflict
 {
-	idx_t var = IDX_MAX;
-	idx_t res = IDX_MAX;
-	uint8_t freeze = 0;
-	std::pair<idx_t, idx_t> train = {IDX_MAX, IDX_MAX};
+	idx_t idx = IDX_MAX;
+	uint8_t value = 1;
+	uint8_t in_model = 0;
+
+	uint8_t graph_update = true;
+	Edge graph_edge = Edge();
+
+	GRBVar var;
+
+	std::pair<
+		Preprocess::Chunk*, 
+		Preprocess::Chunk*
+	> chunks = {nullptr, nullptr};
 };
 
 
+struct Solver::Chunk
+{
+	Interval<tim_t> tim = {0, TIM_MAX};
+	Preprocess::Chunk* prepr = nullptr;
 
+	inline bool operator<(const Chunk& x) const { return tim < x.tim; }
+	inline bool operator==(const Chunk& x) const { return tim == x.tim; }
+};
 
 
 struct Solver::Var_assign
 {
-	idx_t idx = IDX_MAX;
+	mutable GRBVar var;
 	uint8_t value = 0;
 
-	inline bool operator==(idx_t x) const { return idx == x; }
-	inline GRBLinExpr to_expr(const std::vector<GRBVar>& vars);
+	inline bool operator==(const Var_assign& x) const
+	{ return value == x.value && var.sameAs(x.var); }
+	
+	inline GRBLinExpr to_expr() const
+	{ return (value == 1) ? var : (1 - var); } 
 };
 
 
 struct Solver::Cycle_cons
 {
-	uint8_t in_model = 0;
-	GRBConstr model_cons;
+	uint8_t in_model = false;
 	std::vector<Var_assign> assigns = {};
+	GRBConstr model_cons;
 	
-	void add_to_model(GRBModel& model, const std::vector<GRBVar>& conf_vars);
+	void add_to_model(GRBModel& model);
 	void remove_from_model(GRBModel& model);
 };
 
 
 struct Solver::Path_cons
 {
-	uint8_t in_model = 0;
-	uint8_t is_bin = 0;
-	idx_t obj_idx = IDX_MAX;
+	uint8_t in_model = false;
 	tim_t delay = 0;
-	GRBConstr model_cons;
+	const Obj* obj = nullptr;
 	std::vector<Var_assign> assigns = {};
+	GRBConstr model_cons;
 
-	void add_to_model(GRBModel& model, const std::vector<GRBVar>& conf_vars,
-		const std::vector<GRBVar>& obj_vars);
+	void add_to_model(GRBModel& model);
 	void remove_from_model(GRBModel& model);
 };
-
-inline GRBLinExpr Solver::Var_assign::to_expr(const std::vector<GRBVar>& vars)
-{
-	auto& var = vars[idx];
-	return (value == 1) ? var : (1 - var); 
-}
-
-
-inline std::ostream& operator<<(std::ostream& os, const Solver::Var_assign& x)
-{
-	os << "v" << x.idx << ":" << (uint64_t)x.value;
-	return os;
-}

@@ -9,20 +9,8 @@ using namespace std;
 Solver::Solver(const Preprocess& prepr, GRBEnv& grb_env)
 	: inst(prepr.inst), prepr(prepr), grb_env(grb_env), model(grb_env)
 {
-	size_t n_levels = this->prepr.n_levels();
-	size_t n_trains = this->inst.n_trains();
-
-	this->event_graph.set_n_vtx(n_levels);
-
-	this->objs.reserve(n_trains);
-
-	this->level_dur.resize(n_levels, IDX_MAX);
-	
-	this->res_ints.resize(this->inst.n_res, {});
-	
-	this->init_res_use();
-
-	// this->model.set(GRB_IntParam_Presolve, 0);
+	this->init_data();
+	this->event_graph.set_n_vtx(prepr.n_levels());
 }
 
 
@@ -32,16 +20,31 @@ Solver::~Solver()
 }
 
 
-void Solver::init_res_use()
+void Solver::init_data()
 {
-	size_t n_res = this->inst.n_res;
-	size_t n_trains = this->inst.n_trains();
+	this->init_objs();
+	this->init_routes();
+}
 
-	this->res_use.resize(n_trains);
-	this->res_use_data.resize(n_res*n_trains, Res_use());
 
-	for (auto t : this->inst.trains_range()) {
-		this->res_use[t] = &this->res_use_data[t*n_res];
+void Solver::init_objs()
+{
+	this->objs.resize(this->prepr.n_objs());
+	for (auto& obj_p : this->prepr.objs) {
+		auto& obj = this->objs[obj_p.idx];
+		obj.prepr = &obj_p;
+	}
+}
+
+
+void Solver::init_routes()
+{
+	this->n_routes = this->prepr.n_routes();
+	this->routes.resize(this->n_routes);
+
+	for (auto& route_p : this->prepr.routes) {
+		auto& route = this->routes[route_p.idx];
+		route.prepr = &route_p;
 	}
 }
 
@@ -49,304 +52,221 @@ void Solver::init_res_use()
 void Solver::solve()
 {
 	for (auto t : this->inst.trains_range()) {
-		this->add_train(t);
+		this->solver_loop();
 	}
 }
 
 
-void Solver::add_train(idx_t t)
+void Solver::solver_loop()
 {
-	this->add_train_req_ops(t);
-	this->add_train_level_dur(t);
-	this->add_train_req_objs(t);
-
-	cout << "add train " << t << endl;
-
-	size_t state = STATE_UPDATE_GRAPH;
-
-	while (state != STATE_DONE) {
-		switch (state)	{
-		  case STATE_SOLVE_MODEL:
-			this->solve_model();
-		    if (this->update_values()) {
-				state = STATE_UPDATE_GRAPH;
-			}
-			else {
-				state = STATE_UPDATE_OBJ;
-			}
+	while (this->state != SLVR_DONE && this->state != SLVR_FAIL) {
+		switch (this->state)	{
+		  case SLVR_OPTIMIZE_MODEL:
+			this->optimize_model();
 			break;
 		
-		  case STATE_UPDATE_GRAPH:
+		  case SLVR_UPDATE_VALUES:
+		    this->update_values();
+			break;
+		
+		  case SLRV_UPDATE_GRAPH:
 			this->update_graph();
-			if (this->event_graph.update()) { // cycle found
-				this->add_cycle_cons();
-				state = STATE_SOLVE_MODEL;
-			}
-			else {
-				state = STATE_UPDATE_OBJ;
-			}
 			break;
 
-		  case STATE_UPDATE_OBJ:
-			if (this->add_obj_cons()) {
-				state = STATE_SOLVE_MODEL;
-			}
-			else {
-				state = STATE_FIND_CONFLICT;
-			}
+		  case SLVR_UPDATE_OBJ:
+			this->update_objs();
 			break;
 
-		  case STATE_FIND_CONFLICT:
-			if (this->add_conflict()) {
-				state = STATE_UPDATE_GRAPH;
-			}
-			else {
-				cout << "optimal sol found" << endl;
-				state = STATE_DONE;
-			}
+		  case SLVR_ADD_CONFLICT:
+			this->add_conflict();
 			break;
 		
 		  default:
-			assert(state == STATE_DONE);
+			assert(this->state == SLVR_DONE || this->state == SLVR_FAIL);
 			break;
 		}
 	}
 
-	this->freeze_conflicts();
-	this->clear_model();
-}
-
-
-
-void Solver::add_train_route(idx_t t)
-{
-
-}
-
-
-void Solver::add_train_req_ops(idx_t t)
-{
-	for (auto& level : this->prepr.trains[t].levels) {
-		if (level.n_succ() != 1) {
-			continue;
-		}
-		
-		idx_t o = level.succ[0].op;
-
-		auto& op = this->inst.ops[o];
-		auto& l_op = this->prepr.ops[o].level;
-		assert(l_op.start == level.idx && l_op.end == level.idx + 1);
-
-		this->level_dur[level.idx] = op.dur;
-		
-		if (op.n_res() > 0) {
-			assert(op.n_res() == 1);
-			auto& res = op.res[0];
-
-			auto& ru = this->res_use[t][res.idx];
-			ru.level = l_op;
-			ru.time = res.time;
-		}
-
-		this->event_graph.time_lb[level.idx] = op.start_lb;
-	}
-}
-
-
-void Solver::add_train_req_objs(idx_t t)
-{
-	for (auto& level : this->prepr.trains[t].levels) {
-		if (level.n_succ() != 1) {
-			continue;
-		}
-		
-		idx_t o = level.succ[0].op;
-		auto& op = this->inst.ops[o];
-		
-		if (op.obj < IDX_MAX) {
-			this->add_obj(level.train, level.idx, op.obj);
-		}
-	}
-}
-
-void Solver::add_train_level_dur(idx_t t)
-{
-	for (auto& level : this->prepr.trains[t].levels) {
-		if (level.n_succ() == 0 || this->level_dur[level.idx] < DUR_MAX) {
-			continue;
-		}
-
-		dur_t dur = DUR_MAX;
-		for (auto& succ : level.succ) {
-			idx_t o = succ.op;
-			
-			auto& op = this->inst.ops[o];
-			auto& l_op = this->prepr.ops[o].level;
-			assert(l_op.start == level.idx && l_op.end == level.idx + 1);
-
-			dur = MIN(dur, op.dur);
-		}
-
-		this->level_dur[level.idx] = dur;
+	if (this->state == SLVR_FAIL) {
+		cout << "solver failed" << endl;
 	}
 }
 
 
 
-void Solver::add_obj(idx_t train, idx_t level, idx_t inst_idx)
+
+void Solver::optimize_model()
 {
-	auto& inst_obj = this->inst.objs[inst_idx];
-
-	Obj obj = {
-		.idx = (idx_t)this->objs.size(),
-		.train = train,
-		.level = level,
-		.is_bin = inst_obj.increment > 0,
-		.threshold = inst_obj.threshold
-	};
-
-	GRBVar var;
-	if (obj.is_bin) {
-		var = this->model.addVar(0, 1, inst_obj.increment, GRB_BINARY);
-	}
-	else {
-		var = this->model.addVar(0, GRB_INFINITY, inst_obj.coeff, GRB_CONTINUOUS);
-	}
-
-	this->objs.push_back(obj);
-	this->obj_vars.push_back(var);
-	this->obj_values.push_back(0);
-}
-
-
-void Solver::update_graph()
-{
-	cout << "update graph" << endl;
-	this->event_graph.clear_edges();
-	this->add_dur_edges();
-	this->add_conf_edges();
-}
-
-
-void Solver::add_dur_edges()
-{
-	for (auto l : prepr.levels_range()) {
-		dur_t dur = this->level_dur[l];
-		if (dur < DUR_MAX) {
-			idx_t l_next = l + 1;
-			this->event_graph.add_edge({{l, l_next}, IDX_MAX, dur});
-		}
-	}
-}
-
-
-void Solver::add_conf_edges()
-{
-	for (auto& conf : this->conflicts) {
-		auto& ru1 = this->res_use[conf.train.first][conf.res];
-		auto& ru2 = this->res_use[conf.train.second][conf.res];
-
-		bool order = (conf.var == IDX_MAX) ? conf.freeze : this->conf_values[conf.var];
-		if (order) {
-			this->event_graph.add_edge({{ru1.level.end, ru2.level.start}, conf.var, ru1.time});
-		}
-		else {
-			this->event_graph.add_edge({{ru2.level.end, ru1.level.start}, conf.var, ru2.time});
-		}
-	}
-}
-
-
-void Solver::clear_model()
-{
-	cout << "clear model" << endl;
-	for (auto& x : this->cycle_cons) {
-		x.remove_from_model(this->model);
-	}
-	this->cycle_cons.clear();
-
-	for (auto& x : this->path_cons) {
-		x.remove_from_model(this->model);
-	}
-	this->path_cons.clear();
-	
-	for (auto& x : this->conf_vars) {
-		this->model.remove(x);
-	}
-	this->conf_vars.clear();
-	this->conf_values.clear();
-}
-
-void Solver::solve_model()
-{
-	cout << "solve model" << endl;
-
+	this->state = SLVR_UPDATE_VALUES; // if not fail
 	int status;
 	try {
 		this->model.update();
 		this->model.optimize();
 		status = this->model.get(GRB_IntAttr_Status);
 		if (status == GRB_OPTIMAL) {
-			this->last_obj_val = this->model.get(GRB_DoubleAttr_ObjVal);
+			this->obj_val = this->model.get(GRB_DoubleAttr_ObjVal);
 		}
 		
 	}
 	catch (const GRBException& ex) {
 		cout << "ERROR: optimization exception: " << ex.getMessage() << ", code: " << ex.getErrorCode() << endl;
-		exit(1);
+		this->state = SLVR_FAIL;
 	}
 
 	if (status != GRB_OPTIMAL) {
 		cout << "ERROR: model optim failed, status: " << status << endl;
-		exit(1);
+		this->state = SLVR_FAIL;
 	}
 }
 
 
-bool Solver::update_values()
+void Solver::update_values()
 {
-	bool update_needed = false;
+	bool need_graph_update = false;
 
-	cout << "update values = ";
+	for (auto& obj : this->objs) {
+		obj.value = round(obj.var.get(GRB_DoubleAttr_X));
+	}
 
-	size_t n_vars = this->conf_vars.size();
-	for (size_t i = 0; i < n_vars; i++) {
-		auto& var = this->conf_vars[i];
-		
-		bool old_val = this->conf_values[i];
-		bool new_val = var.get(GRB_DoubleAttr_X) > 0.5;
-		this->conf_values[i] = new_val;
-		
-		if (old_val != new_val) {
-			update_needed = true;
+	for (auto& route : this->routes) {
+		if (route.in_model) {
+			route.value = route.var.get(GRB_DoubleAttr_X) > 0.5;
 		}
 	}
 
-	n_vars = this->obj_vars.size();
-	for (size_t i = 0; i < n_vars; i++) {
-		auto& var = this->obj_vars[i];
-		this->obj_values[i] = round(var.get(GRB_DoubleAttr_X));
+	for (auto& conf : this->conflicts) {
+		if (conf.in_model) {
+
+			uint8_t new_val = conf.var.get(GRB_DoubleAttr_X) > 0.5;
+			if (new_val != conf.value) {
+				conf.graph_update = true;
+			}
+		}
 	}
 
-	cout << (update_needed ? "true" : "false") << endl;
-
-	return update_needed;
 }
 
-vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Edge_vertex>& path)
+
+void Solver::update_graph()
+{
+	bool changed = false;
+
+	if (this->update_route_edges()) {
+		changed = true;
+	}
+
+	if (this->update_conf_edges()) {
+		changed = true;
+	}
+
+	this->state = SLVR_UPDATE_OBJ;
+	if (changed) {
+		if (this->event_graph.update()) {
+			this->add_cycle_cons();
+			this->state = SLVR_OPTIMIZE_MODEL;
+		}
+	}
+}
+
+
+bool Solver::update_route_edges()
+{
+	bool changed = false;
+	for (auto& route : this->routes) {
+		if (route.in_graph == 0 && route.value == 1) {
+			for (auto o : route.prepr->ops) {
+				auto& op = this->prepr.ops[o];
+
+				Edge edge = {{op.level.start, op.level.end},
+					route.prepr->idx, op.inst->dur};
+			
+				this->event_graph.add_edge(edge);
+			}
+			route.in_graph = 1;
+			changed = true;
+		}
+		
+		if (!route.in_graph == 1 && route.value == 0) {
+			for (auto o : route.prepr->ops) {
+				auto& op = this->prepr.ops[o];
+
+				Edge edge = {{op.level.start, op.level.end},
+					route.prepr->idx, op.inst->dur};
+
+				bool removed = this->event_graph.remove_edge(edge);
+				assert(removed);
+			}
+			route.in_graph = 1;
+			changed = true;
+		}
+	}
+
+	return changed;
+}
+
+
+bool Solver::update_conf_edges()
+{
+	assert(this->n_routes + this->conflicts.size() < EDG_MAX);
+
+	bool changed = false;
+
+	for (auto& conf : this->conflicts) {
+		if (conf.graph_update == 0) {
+			continue;
+		}
+		
+
+		edg_t edge_idx = (edg_t)conf.idx + (edg_t)this->n_routes;
+		Edge new_edge;
+		if (conf.value == 1) {
+			new_edge = {{conf.chunks.first->level.end, conf.chunks.second->level.start},
+				conf.chunks.first->time, edge_idx};
+		}
+		else {
+			new_edge = {{conf.chunks.second->level.end, conf.chunks.first->level.end},
+				conf.chunks.second->time, edge_idx};
+		}
+
+		if (new_edge != conf.graph_edge) {
+			if (conf.graph_edge.v.start != EDG_MAX) {
+				bool removed = this->event_graph.remove_edge(conf.graph_edge);
+				assert(removed);
+			}
+
+			this->event_graph.add_edge(new_edge);
+			conf.graph_edge = new_edge;
+
+			bool changed = false;
+		}
+	}
+
+	return changed;
+}
+
+
+vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Vertex_edge>& path)
 {
 	this->assign_set.clear();
 	for (auto& x : path) {
-		if (x.e < IDX_MAX) {
-			assert(x.e < this->conf_values.size());
+		if (x.e < EDG_MAX) {
+			assert(x.e < this->n_routes + this->conflicts.size());
 			this->assign_set.insert(x.e);
 		}
 	}
 
 	vector<Solver::Var_assign> assigns = {};
 	for (auto& x : this->assign_set) {
-		assigns.push_back({x, this->conf_values[x]});
-	}
+		if (x < this->n_routes) {
+			auto& route = this->routes[x];
+			if (route.in_graph) {
+				assigns.push_back({route.var, route.value});
+			}
+		}
+		else {
+			auto& conf = this->conflicts[x - this->n_routes];
+		}
+	}	
 
 	return assigns;
 }
@@ -354,73 +274,73 @@ vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Edg
 
 void Solver::add_cycle_cons()
 {
-	cout << "add cycle cons ";
-
 	auto& cycle = this->event_graph.get_shortest_cycle();
 	
 	Cycle_cons cons;
-
 	cons.assigns = this->collect_assigns(cycle);
 	cout << cons.assigns << endl;
-
 	
-	assert(cons.assigns.size() >= 2);
-
-	cons.add_to_model(this->model, this->conf_vars);
+	assert(cons.assigns.size() >= 1);
+	cons.add_to_model(this->model);
 
 	this->cycle_cons.push_back(cons);
 }
 
 
+void Solver::update_objs()
+{
+	if (add_obj_cons()) {
+		this->state = SLVR_OPTIMIZE_MODEL
+	}
+}
+
 bool Solver::add_obj_cons()
 {
 	tim_t max_diff = 0;
 	tim_t max_delay = 0;
-	idx_t max_idx = IDX_MAX;
+	const Obj* max_obj = nullptr;
+	
 
 	for (auto& obj : this->objs) {
-		tim_t value = this->obj_values[obj.idx];
-		if (obj.is_bin && value > 0) {
+		if (obj.prepr->is_bin && obj.value == 1) {
 			continue;
 		}
 
-		tim_t delay = this->event_graph.time(obj.level) - obj.threshold;
-		if (!obj.is_bin && value >= delay) {
+		tim_t tim = this->event_graph.time[obj.prepr->level];
+		if (tim < obj.prepr->threshold) {
 			continue;
 		}
 
-		tim_t diff = delay - value;
+		tim_t delay = tim - obj.prepr->threshold;
+		if (delay <= obj.value) {
+			continue;
+		}
+
+		time_t diff = obj.prepr->is_bin ? 
+			obj.prepr->coeff : 
+			obj.prepr->coeff*(delay - obj.value);
+
 		if (max_diff < diff) {
 			max_diff = diff;
 			max_delay = delay;
-			max_idx = obj.idx;
+			max_obj = &obj;
 		}
 	}
 
-	if (max_idx == IDX_MAX) {
+	if (max_obj == nullptr) {
 		return false;
 	}
 
-	auto& obj = this->objs[max_idx];
-	auto& path = this->event_graph.get_critical_path(obj.level);
+	auto& path = this->event_graph.get_critical_path(max_obj->prepr->level);
 
-	cout << "add obj cons t" << obj.train;
-	if (obj.is_bin) {
-		cout << ", bin, ";
-	}
-	else {
-		cout << ", delay " << max_delay << ", ";
-	}
-
-	Path_cons cons;
-	cons.is_bin = obj.is_bin;
-	cons.obj_idx = obj.idx;
-	cons.delay = max_delay;
-	cons.assigns = this->collect_assigns(path);
-
-	cout << cons.assigns << endl;
-
-	cons.add_to_model(this->model, this->conf_vars, this->obj_vars);
+	Path_cons cons = {
+		.in_model = false,
+		.delay = max_delay,
+		.obj = max_obj,
+		.assigns = this->collect_assigns(path)
+	};
+	
+	cons.add_to_model(this->model);
 	this->path_cons.push_back(cons);
 
 	return true;
@@ -509,8 +429,7 @@ void Solver::freeze_conflicts()
 }
 
 
-void Solver::Cycle_cons::add_to_model(GRBModel& model, 
-	const vector<GRBVar>& conf_vars)
+void Solver::Cycle_cons::add_to_model(GRBModel& model)
 {
 	if (this->in_model) {
 		return;
@@ -518,7 +437,7 @@ void Solver::Cycle_cons::add_to_model(GRBModel& model,
 	
 	GRBLinExpr expr(0);
 	for (auto x : this->assigns) {
-		expr += x.to_expr(conf_vars);
+		expr += x.to_expr();
 	}
 
 	this->model_cons = model.addConstr(expr <= assigns.size() - 1);
@@ -535,9 +454,7 @@ void Solver::Cycle_cons::remove_from_model(GRBModel& model)
 }
 
 
-void Solver::Path_cons::add_to_model(GRBModel& model, 
-	const vector<GRBVar>& conf_vars, 
-	const vector<GRBVar>& obj_vars)
+void Solver::Path_cons::add_to_model(GRBModel& model)
 {
 	if (this->in_model) {
 		return;
@@ -545,17 +462,16 @@ void Solver::Path_cons::add_to_model(GRBModel& model,
 	
 	GRBLinExpr expr(0);
 	for (auto x : this->assigns) {
-		expr += x.to_expr(conf_vars);
+		expr += x.to_expr();
 	}
 
 	size_t n_assigns = this->assigns.size();
 
-	auto& obj_var = obj_vars[this->obj_idx];
-	if (this->is_bin) {
-		this->model_cons = model.addConstr((expr - n_assigns + 1) <= obj_var);
+	if (this->obj->prepr->is_bin) {
+		this->model_cons = model.addConstr((expr - n_assigns + 1) <= this->obj->var);
 	}
 	else {
-		this->model_cons = model.addConstr((expr - n_assigns + 1)*this->delay <= obj_var);
+		this->model_cons = model.addConstr((expr - n_assigns + 1)*this->delay <= this->obj->var);
 	}
 	
 	this->in_model = true;

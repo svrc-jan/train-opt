@@ -30,7 +30,7 @@ void Event_graph::set_n_vtx(const size_t n_vtx)
 	this->shortest_cycle.resize(n_vtx);
 
 	this->time_lb.resize(n_vtx, 0);
-	this->_time.resize(n_vtx);
+	this->time.resize(n_vtx);
 	this->time_pred.resize(n_vtx);
 }
 
@@ -39,43 +39,39 @@ void Event_graph::add_edge(const Edge& x)
 {
 	assert(x.v.start < this->n_vtx && x.v.end < this->n_vtx);
 
-	this->edges_in[x.v.end].push_back({x.v.start, x.e, x.d});
-	this->edges_out[x.v.start].push_back({x.v.end, x.e, x.d});
+	this->edges_in[x.v.end].push_back(x.to_in());
+	this->edges_out[x.v.start].push_back(x.to_out());
 
 	this->need_update += x.v.end;
 }
 
 
-bool Event_graph::set_edge_by_idx(const Edge& x, size_t idx)
+bool Event_graph::remove_edge(const Edge& x)
 {
-	Edge_entry& e_in = this->edges_in[x.v.end][idx];
-	Edge_entry& e_out = this->edges_in[x.v.end][idx];
+	auto& edg_in = this->edges_in[x.v.end];
+	auto in_entry = find(edg_in.rbegin(), edg_in.rend(), x.to_in());
+	
+	auto& edg_out = this->edges_out[x.v.start];
+	auto out_entry = find(edg_out.rbegin(), edg_out.rend(), x.to_out());
 
-	if (x.v.start != e_in.v || x.v.end != e_out.v) {
+	bool in_miss = in_entry == edg_in.rend();
+	bool out_miss = out_entry == edg_out.rend();
+	if (in_miss || out_miss) {
+		assert(in_miss && out_miss);
 		return false;
 	}
 
-	e_in = {x.e, x.v.start, x.d};
-	e_out = {x.e, x.v.end, x.d};
+	*in_entry = edg_in.back();
+	edg_in.pop_back();
+
+	*out_entry = edg_out.back();
+	edg_out.pop_back();
+
+	this->need_update += x.v.end;
 
 	return true;
 }
 
-
-void Event_graph::set_all_edge_idx(edg_t idx)
-{
-	for (auto& x : this->edges_in) {
-		for (auto& y : x) {
-			y.e = idx;
-		}
-	}
-
-	for (auto& x : this->edges_out) {
-		for (auto& y : x) {
-			y.e = idx;
-		}
-	}
-}
 
 void Event_graph::add_edges(const vector<Edge>& edges)
 {
@@ -204,15 +200,18 @@ void Event_graph::update_time(vtx_t v)
 {
 	assert(this->visited[v]);
 
-	this->_time[v] = this->time_lb[v];
-	this->time_pred[v] = Edge_vertex();
+	this->time[v] = this->time_lb[v];
+	this->time_pred[v] = Vertex_edge();
 
 	for (auto& x : this->edges_in[v]) {
 		assert(!this->visited[x.v]);
 
-		tim_t new_time = this->_time[x.v] + (tim_t)x.d;
-		if (this->_time[v] < new_time) {
-			this->_time[v] = new_time;
+		tim_t new_time = this->time[x.v] + (tim_t)x.d;
+		if (this->time[v] < new_time) {
+			this->time[v] = new_time;
+			this->time_pred[v] = x;
+		}
+		if (this->time[v] == new_time && x.e == EDG_MAX) {
 			this->time_pred[v] = x;
 		}
 	}
@@ -221,9 +220,9 @@ void Event_graph::update_time(vtx_t v)
 }
 
 
-const vector<Event_graph::Edge_vertex>& Event_graph::get_shortest_cycle(vtx_t start)
+const vector<Event_graph::Vertex_edge>& Event_graph::get_shortest_cycle(vtx_t start)
 {
-	vector<Edge_vertex>& ret = this->shortest_cycle;
+	vector<Vertex_edge>& ret = this->shortest_cycle;
 	ret.clear();
 
 	if (start == VTX_MAX) {
@@ -241,7 +240,7 @@ const vector<Event_graph::Edge_vertex>& Event_graph::get_shortest_cycle(vtx_t st
 		
 		for (auto& x : this->edges_out[v]) {
 			if (!visited[x.v]) {
-				this->cycle_pred[x.v] = {x.e, v};
+				this->cycle_pred[x.v] = {v, x.e};
 				visited += x.v;
 			}
 			if (x.v == start) {
@@ -264,9 +263,9 @@ const vector<Event_graph::Edge_vertex>& Event_graph::get_shortest_cycle(vtx_t st
 	return ret;
 }
 
-const vector<Event_graph::Edge_vertex>& Event_graph::get_critical_path(vtx_t start)
+const vector<Event_graph::Vertex_edge>& Event_graph::get_critical_path(vtx_t start)
 {
-	vector<Edge_vertex>& ret = this->critical_path;
+	vector<Vertex_edge>& ret = this->critical_path;
 	ret.clear();
 
 	vtx_t v = start;
