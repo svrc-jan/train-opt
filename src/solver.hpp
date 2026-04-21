@@ -4,7 +4,6 @@
 
 #include "gurobi_c++.h"
 
-
 #include "instance.hpp"
 #include "preprocess.hpp"
 #include "event_graph.hpp"
@@ -59,7 +58,7 @@ public:
 
 private:
 	GRBEnv& grb_env;
-	GRBModel model = nullptr;
+	GRBModel model;
 
 	double obj_val = 0;
 
@@ -70,7 +69,8 @@ private:
 	std::vector<Route> routes = {};
 	std::vector<Conflict> conflicts = {};
 
-	std::vector<std::vector<Chunk>> chunks = {};
+	std::vector<std::vector<idx_t>> res_chunks; 
+	std::vector<Chunk> chunks = {};
 
 	std::vector<GRBConstr> route_cons = {};
 	std::vector<Cycle_cons> cycle_cons = {};
@@ -85,6 +85,7 @@ private:
 	void init_data();
 	void init_objs();
 	void init_routes();
+	void init_chunks();
 
 
 	void solver_loop();
@@ -97,14 +98,13 @@ private:
 	bool update_route_edges();
 	bool update_conf_edges();
 	void add_cycle_cons();
-	
 
 	void update_objs();
 	bool add_obj_cons();
-	
-	void clear_model();
 
 	bool add_conflict();
+
+	void clear_model();
 	void freeze_conflicts();
 
 	std::vector<Var_assign> collect_assigns(
@@ -124,10 +124,20 @@ struct Solver::Route
 {
 	uint8_t value = 0;
 	uint8_t in_graph = 0;
+	uint8_t in_chunks = 0;
 	uint8_t in_model = 0;
 	GRBVar var;
 
 	const Preprocess::Route* prepr;
+};
+
+struct Solver::Chunk
+{
+	Interval<tim_t> tim = {0, TIM_MAX};
+	const Preprocess::Chunk* prepr = nullptr;
+
+	inline bool operator<(const Chunk& x) const { return tim < x.tim; }
+	inline bool operator==(const Chunk& x) const { return tim == x.tim; }
 };
 
 struct Solver::Conflict
@@ -142,20 +152,13 @@ struct Solver::Conflict
 	GRBVar var;
 
 	std::pair<
-		Preprocess::Chunk*, 
-		Preprocess::Chunk*
+		const Preprocess::Chunk*, 
+		const Preprocess::Chunk*
 	> chunks = {nullptr, nullptr};
 };
 
 
-struct Solver::Chunk
-{
-	Interval<tim_t> tim = {0, TIM_MAX};
-	Preprocess::Chunk* prepr = nullptr;
 
-	inline bool operator<(const Chunk& x) const { return tim < x.tim; }
-	inline bool operator==(const Chunk& x) const { return tim == x.tim; }
-};
 
 
 struct Solver::Var_assign

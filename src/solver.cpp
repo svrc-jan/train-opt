@@ -49,6 +49,26 @@ void Solver::init_routes()
 }
 
 
+void Solver::init_chunks()
+{
+	size_t n_res = this->inst.n_res;
+	this->res_chunks.resize(n_res);
+	for (auto r : this->inst.res_range()) {
+		this->res_chunks[r].reserve(this->prepr.res_n_chunks[r]);
+	}
+	
+	this->chunks.resize(this->prepr.n_chunks());
+	for (auto& chunk : this->prepr.chunks) {
+		this->chunks[chunk.idx].prepr = &chunk;
+	}
+	
+	for (auto& o : this->prepr.ops_req) {
+		auto& chunk = this->prepr.chunks[this->prepr.ops[o].chunk];
+		this->res_chunks[chunk.res.idx].push_back(chunk.idx);
+	}
+}
+
+
 void Solver::solve()
 {
 	for (auto t : this->inst.trains_range()) {
@@ -221,11 +241,11 @@ bool Solver::update_conf_edges()
 		Edge new_edge;
 		if (conf.value == 1) {
 			new_edge = {{conf.chunks.first->level.end, conf.chunks.second->level.start},
-				conf.chunks.first->time, edge_idx};
+				conf.chunks.first->res.time, edge_idx};
 		}
 		else {
 			new_edge = {{conf.chunks.second->level.end, conf.chunks.first->level.end},
-				conf.chunks.second->time, edge_idx};
+				conf.chunks.second->res.time, edge_idx};
 		}
 
 		if (new_edge != conf.graph_edge) {
@@ -266,7 +286,7 @@ vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Ver
 		else {
 			auto& conf = this->conflicts[x - this->n_routes];
 		}
-	}	
+	}
 
 	return assigns;
 }
@@ -289,9 +309,11 @@ void Solver::add_cycle_cons()
 
 void Solver::update_objs()
 {
+	this->state = SLVR_ADD_CONFLICT;
 	if (add_obj_cons()) {
-		this->state = SLVR_OPTIMIZE_MODEL
+		this->state = SLVR_OPTIMIZE_MODEL;
 	}
+
 }
 
 bool Solver::add_obj_cons()
@@ -349,82 +371,15 @@ bool Solver::add_obj_cons()
 
 bool Solver::add_conflict()
 {	
-
-	
-	for (auto& x : this->res_ints) {
-		x.clear();
+	for (auto& x : this->conflicts) {
+		
 	}
-
-	auto res_range = this->inst.res_range();
-	for (auto t : this->inst.trains_range()) {
-		for (auto r : res_range) {
-			auto& ru = this->res_use[t][r];
-
-			if (ru.level.start < IDX_MAX) {			
-				auto& ri = this->res_ints[r];
-				tim_t start = this->event_graph.time(ru.level.start);
-				tim_t end = this->event_graph.time(ru.level.end);
-				ri.push_back({t, r, {start, end}});
-			}
-		}
-	}
-
-	tim_t earliest = TIM_MAX;
-	Conflict conf;
-
-	for (auto ri : this->res_ints) {
-		sort(ri.begin(), ri.end());
-
-		size_t ri_size = ri.size();
-		for (size_t i = 0; i + 1 < ri_size; i++) {
-			auto& a = ri[i];
-			auto& b = ri[i+1];
-
-			if (b.tim.start >= earliest) {
-				break;
-			}
-
-			if (a.tim.end > b.tim.end) {
-				conf.res = a.res;
-				if (a.train < b.train) {
-					conf.train = {a.train, b.train};
-				}
-				else {
-					conf.train = {b.train, a.train};
-				}
-
-				earliest = b.tim.end;
-				break;
-			}
-		}
-	}
-
-	if (earliest == TIM_MAX) {
-		return false;
-	}
-
-	
-	conf.var = this->conf_vars.size();
-	this->conflicts.push_back(conf);
-
-	cout << "add conflict " << conf.res << " : " << conf.train << ", v" << conf.var << endl; 
-
-	
-	auto var = this->model.addVar(0, 1, 0, GRB_BINARY);
-	this->conf_vars.push_back(var);
-	this->conf_values.push_back(0);
-
-
-	return true;
 }
 
 void Solver::freeze_conflicts()
 {
 	for (auto& x : this->conflicts) {
-		if (x.var < IDX_MAX) {
-			x.freeze = this->conf_values[x.var];
-			x.var = IDX_MAX;
-		}
+		
 	}
 }
 

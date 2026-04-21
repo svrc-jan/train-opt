@@ -25,13 +25,11 @@ int main(int argc, char const *argv[])
 			cout << entry << endl;
 			Instance inst(entry);
 			Preprocess prepr(inst, true);
-
-			cout << "routes / ops : " << prepr.n_routes() << " / " << prepr.n_ops() << endl;
 		}
 	}
 	else {
 		Instance inst(argv[1]);
-		Preprocess prepr(inst);
+		Preprocess prepr(inst, true);
 
 		// for (auto& level : prepr.levels) {
 		// 	cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_req << endl;

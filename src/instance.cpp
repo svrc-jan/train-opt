@@ -15,15 +15,19 @@ Instance::Instance(const string& file_name, const bool verify)
 	this->parse(inst_jsn);
 	this->assign_arrays();
 	this->assign_pred_ops();
-	// this->set_leading_trailing();
-	// this->propagate_lower_bounds();
-	// this->set_max_bound();
-	// this->propagate_upper_bounds();
 
 	if (verify) {
 		this->verify_json(inst_jsn);
 		this->verify_pred();
 	}
+
+	cout << "Instance" <<
+		"\n  trains:  " << this->n_trains() <<
+		"\n  objs:    " << this->objs.size() << 
+		"\n  ops:     " << this->n_ops() <<
+		"\n  op succ: " << this->n_op_succ() <<
+		"\n  res:     " << this->n_res << 
+		"\n  op res:  " << this->n_op_res() << endl;
 }
 
 
@@ -125,6 +129,7 @@ void Instance::parse(const json& inst_jsn)
 			op.succ.clear();
 			for (idx_t s : op_jsn["successors"]) {
 				op.succ.increment_size(1);
+				assert(s + train.op_first > op.idx);
 				this->op_succ.push_back(s + train.op_first);
 			}
 
@@ -490,6 +495,49 @@ void Instance::set_max_bound()
 		}
 	}
 }
+
+
+bool Instance::is_op_lock(idx_t o, idx_t r) const
+{
+	auto& op = this->ops[o];
+	if (op.res.find(r) == nullptr) {
+		return false;
+	}
+
+	if (op.n_pred() == 0) {
+		return true;
+	}
+
+	for (auto p : op.pred) {
+		if (this->ops[p].res.find(r) == nullptr) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+bool Instance::is_op_unlock(idx_t o, idx_t r) const
+{
+	auto& op = this->ops[o];
+	if (op.res.find(r) == nullptr) {
+		return false;
+	}
+
+	if (op.n_succ() == 0) {
+		return true;
+	}
+
+	for (auto s : op.succ) {
+		if (this->ops[s].res.find(r) == nullptr) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 
 
 Instance::Paths Instance::get_random_paths() const

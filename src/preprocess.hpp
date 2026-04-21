@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <queue>
 
 #include "utils/flag.hpp"
@@ -14,16 +15,20 @@ public:
 	struct Route;
 	struct Junction;
 	struct Level;
+	struct Section;
 	struct Chunk;
 	struct Obj;
 	struct Train;
 
-	struct Idx_op;
+	struct Junct_edge;
+	struct Level_edge;
+	struct Chunk_lock;
+	struct Chunk_unlock;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
-	typedef uint8_t cnt_t;
+	typedef uint16_t cnt_t;
 
 	static const idx_t IDX_MAX = Instance::IDX_MAX;
 	static const dur_t DUR_MAX = Instance::DUR_MAX;
@@ -33,25 +38,28 @@ public:
 	const Instance& inst;
 
 	std::vector<Op> 	  ops 	 = {};
-	std::vector<Route> 	  routes = {};
 	std::vector<Junction> juncts = {};
 	std::vector<Level> 	  levels = {};
+	std::vector<Route> 	  routes = {};
+	std::vector<Section>  sects  = {};
 	std::vector<Chunk>	  chunks = {};
 	std::vector<Obj> 	  objs 	 = {};
 	std::vector<Train> 	  trains = {};
-	
-	Flag is_res_req;
-	Flag is_res_opt;
-	Flag is_res_split;
-	Flag is_res_reentry;
+
+	std::vector<idx_t> res_n_chunks = {};
+	std::vector<idx_t> ops_req = {};
+
+	size_t chunk_direct_merges = 0;
+	size_t chunk_parallel_merges = 0;
 	
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
 	
 	METHOD_N(ops)
-	METHOD_N(routes)
 	METHOD_N(juncts)
 	METHOD_N(levels)
+	METHOD_N(routes)
+	METHOD_N(sects)
 	METHOD_N(chunks)
 	METHOD_N(objs)
 	METHOD_N(trains)
@@ -66,26 +74,30 @@ public:
 	METHOD_RANGE(trains, idx_t)
 	
 private:
-	std::vector<Idx_op> junct_succ = {};
-	std::vector<Idx_op> junct_pred = {};
+	struct Op_chunk_chain;
+
+	std::vector<Junct_edge> junct_succ = {};
+	std::vector<Junct_edge> junct_pred = {};
 
 	std::vector<idx_t>  level_juncts = {};
-	std::vector<Idx_op> level_succ = {};
-	std::vector<Idx_op> level_pred = {};
+	std::vector<Level_edge> level_succ = {};
+	std::vector<Level_edge> level_pred = {};
 
-	std::vector<idx_t> ops_req = {};
 	std::vector<idx_t> route_ops = {};
+	std::vector<idx_t> sect_routes = {};
 
 	Flag is_op_req;
-	Flag is_level_req;
 
-	std::vector<cnt_t> op_count = {};
-	std::vector<cnt_t*> res_count = {};
-	std::vector<cnt_t> res_count_data = {};
+	std::vector<idx_t> chunk_ops = {};
 
-	std::vector<idx_t> level_res = {};
+	std::vector<Chunk_lock> chunk_locks = {};
+	std::vector<Chunk_unlock> chunk_unlocks = {};
 
-	std::queue<idx_t> que;
+	std::vector<Chunk_lock> route_locks = {};
+	std::vector<Chunk_unlock> route_unlocks = {};
+
+	std::set<idx_t> set_;
+	std::queue<idx_t> queue_;
 
 	void make_junctions();
 	void make_levels();
@@ -98,11 +110,27 @@ private:
 
 	void make_routes();
 	void make_route_junct_level();
+	void make_sections();
+
+
+	void make_resource_chunks();
+	void make_chunk_locks_unlocks();
+
 	void make_objs();
 
 	void make_junction_bounds();
 	void make_level_bounds();
-	void make_resource_chunks();
+
+	inline size_t n_opt_levels() const;
+
+	bool merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, std::set<idx_t>& op_set);
+	bool is_op_reachable(const std::set<idx_t>& set_from, idx_t target);
+	
+	template<bool FWD>
+	bool is_op_reachable_temp(const std::set<idx_t>& set_from, idx_t target);
+
+	void get_chunk_locks(std::vector<Chunk_lock>& locks, const Chunk& chunk);
+	void get_chunk_unlocks(std::vector<Chunk_unlock>& unlocks, const Chunk& chunk);
 };
 
 
@@ -111,21 +139,10 @@ struct Preprocess::Op
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
 	idx_t route = IDX_MAX;
-	idx_t chunk = IDX_MAX;
-
 	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	Array<idx_t> chunks;
 	const Instance::Op* inst = nullptr;
-};
-
-
-struct Preprocess::Route
-{
-	idx_t idx = IDX_MAX;
-	idx_t train = IDX_MAX;
-	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
-	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
-	Array<idx_t> ops;
 };
 
 
@@ -135,13 +152,13 @@ struct Preprocess::Junction
 
 	idx_t level = IDX_MAX;
 	idx_t train = IDX_MAX;
-	uint8_t req_route_cons = 0;
+	uint8_t is_route = 0;
 
 	tim_t time_lb = 0;
 	tim_t time_ub = TIM_MAX;
 
-	Array<Idx_op> succ;
-	Array<Idx_op> pred;
+	Array<Junct_edge> succ;
+	Array<Junct_edge> pred;
 
 	METHOD_N(succ);
 	METHOD_N(pred);
@@ -152,18 +169,16 @@ struct Preprocess::Level
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
-	uint8_t is_req = 1;
+	uint8_t is_req = 0;
+	uint8_t is_route = 0;
+	uint8_t is_sect = 0;
 
 	tim_t time_lb = 0;
 	tim_t time_ub = TIM_MAX;
 
 	Array<idx_t> juncts;
-	Array<Idx_op> succ;
-	Array<Idx_op> pred;
-
-	Array<idx_t> res;
-	Array<idx_t> res_req;
-	Array<idx_t> res_opt;
+	Array<Level_edge> succ;
+	Array<Level_edge> pred;
 
 	METHOD_N(juncts);
 	METHOD_N(succ);
@@ -171,13 +186,37 @@ struct Preprocess::Level
 };
 
 
+struct Preprocess::Route
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	Array<idx_t> ops;
+	Array<Chunk_lock> chunk_locks;
+	Array<Chunk_unlock> chunk_unlocks;
+};
+
+
+struct Preprocess::Section
+{
+	idx_t idx = IDX_MAX;
+	idx_t train = IDX_MAX;
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	Array<idx_t> routes;
+};
+
+
 struct Preprocess::Chunk
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
-	idx_t res = IDX_MAX;
-	idx_t time = 0;
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	Instance::Res res;
+	Array<idx_t> ops;
+	Array<Chunk_lock> locks;
+	Array<Chunk_unlock> unlocks;
+
 };
 
 struct Preprocess::Obj
@@ -209,10 +248,10 @@ struct Preprocess::Train
 	idx_t level_first = IDX_MAX;
 	
 	Array<Op> 		ops;
-	Array<idx_t> 	ops_req;
-	Array<Route> 	routes;
 	Array<Junction> juncts; 
 	Array<Level> 	levels;
+	Array<Route> 	routes;
+	Array<Section>	sects;
 	Array<Obj> 		objs;
 
 	const Instance::Train* inst = nullptr;
@@ -236,11 +275,69 @@ struct Preprocess::Train
 };
 
 
-struct Preprocess::Idx_op
+struct Preprocess::Junct_edge
 {
-	idx_t idx = IDX_MAX;
+	idx_t junct = IDX_MAX;
 	idx_t op = IDX_MAX;
 
-	bool operator==(const Idx_op& other) const 
-	{ return (this->idx == other.idx) && (this->op == other.op); }
+	inline bool operator==(const Junct_edge& x) const
+	{ return (junct == x.junct) && (op == x.op); }
 };
+
+struct Preprocess::Level_edge
+{
+	idx_t level = IDX_MAX;
+	idx_t op = IDX_MAX;
+	inline bool operator==(const Level_edge& x) const
+	{ return (level == x.level) && (op == x.op); }
+};
+
+
+struct Preprocess::Chunk_lock
+{
+	idx_t chunk = IDX_MAX;
+	idx_t route = IDX_MAX;
+	idx_t level = IDX_MAX;
+	
+	bool operator==(const Chunk_lock& x) const
+	{ return (level == x.level); }
+
+	bool operator!=(const Chunk_lock& x) const
+	{ return !(*this == x); }
+};
+
+
+
+struct Preprocess::Chunk_unlock
+{
+	idx_t chunk = IDX_MAX;
+	idx_t route = IDX_MAX;
+	idx_t level = IDX_MAX;
+	dur_t time = IDX_MAX;
+	
+	bool operator==(const Chunk_unlock& x) const
+	{ return (level == x.level) && (time == x.time); }
+
+	bool operator!=(const Chunk_unlock& x) const
+	{ return !(*this == x); }
+};
+
+
+struct Preprocess::Op_chunk_chain
+{
+	idx_t op = IDX_MAX;
+	dur_t res_time = 0;
+	cnt_t prev = CNT_MAX;
+	cnt_t next = CNT_MAX;
+	cnt_t has_unlock = false;
+};
+
+
+size_t Preprocess::n_opt_levels() const 
+{
+	size_t count = 0;
+	for (auto& level : this->levels) {
+		count += (level.is_req ? 0 : 1);
+	}
+	return count;
+}

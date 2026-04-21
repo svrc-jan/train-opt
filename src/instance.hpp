@@ -55,6 +55,10 @@ public:
 	inline Paths get_empty_paths() const;
 	Paths get_random_paths() const;
 
+	bool is_op_lock(idx_t o, idx_t r) const;
+	bool is_op_unlock(idx_t o, idx_t r) const;
+	
+
 private:
 	void* data_ptr = nullptr;
 
