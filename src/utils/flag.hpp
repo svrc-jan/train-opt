@@ -51,8 +51,12 @@ public:
 	Iter begin() const { return Iter(*this); }
 	size_t end() const { return this->n_items; }
 
+	inline bool empty() const { return this->get_true_count() == 0; } 
 	size_t get_true_count() const;
 	std::vector<size_t> get_true_list() const;
+
+	template<typename T, bool check_count=true>
+	void get_true_list(T& ret) const;
 
 private:
 	uint64_t* data = nullptr;
@@ -68,6 +72,26 @@ private:
 };
 
 
+template<typename T, bool check_count>
+void Flag::get_true_list(T& ret) const
+{
+	ret.clear();
+	if constexpr (check_count) {
+		size_t true_count = this->get_true_count();
+		if (true_count) {
+			return;
+		}
+	}
 
-
+	size_t size = this->req_size();
+	for (size_t i = 0; i < size; i++) {
+		uint64_t item = this->data[i];
+		for (size_t j = 0; item != 0 && j < 64; j++) {
+			if (item & (uint64_t)1) {
+				ret.push_back(i*64 + j);
+			}
+			item >>= 1;
+		}
+	}
+}
 

@@ -22,8 +22,7 @@ public:
 
 	struct Junct_edge;
 	struct Level_edge;
-	struct Chunk_lock;
-	struct Chunk_unlock;
+	struct Chunk_state;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -79,7 +78,7 @@ private:
 	std::vector<Junct_edge> junct_succ = {};
 	std::vector<Junct_edge> junct_pred = {};
 
-	std::vector<idx_t>  level_juncts = {};
+	std::vector<idx_t>  	level_juncts = {};
 	std::vector<Level_edge> level_succ = {};
 	std::vector<Level_edge> level_pred = {};
 
@@ -88,13 +87,8 @@ private:
 
 	Flag is_op_req;
 
-	std::vector<idx_t> chunk_ops = {};
-
-	std::vector<Chunk_lock> chunk_locks = {};
-	std::vector<Chunk_unlock> chunk_unlocks = {};
-
-	std::vector<Chunk_lock> route_locks = {};
-	std::vector<Chunk_unlock> route_unlocks = {};
+	std::vector<Instance::Res> chunk_ops = {};
+	std::vector<idx_t> op_chunks = {};
 
 	std::set<idx_t> set_;
 	std::queue<idx_t> queue_;
@@ -112,9 +106,8 @@ private:
 	void make_route_junct_level();
 	void make_sections();
 
-
 	void make_resource_chunks();
-	void make_chunk_locks_unlocks();
+	void assign_op_chunks();
 
 	void make_objs();
 
@@ -128,9 +121,6 @@ private:
 	
 	template<bool FWD>
 	bool is_op_reachable_temp(const std::set<idx_t>& set_from, idx_t target);
-
-	void get_chunk_locks(std::vector<Chunk_lock>& locks, const Chunk& chunk);
-	void get_chunk_unlocks(std::vector<Chunk_unlock>& unlocks, const Chunk& chunk);
 };
 
 
@@ -193,8 +183,6 @@ struct Preprocess::Route
 	Interval<idx_t> junct = {IDX_MAX, IDX_MAX};
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
 	Array<idx_t> ops;
-	Array<Chunk_lock> chunk_locks;
-	Array<Chunk_unlock> chunk_unlocks;
 };
 
 
@@ -207,17 +195,25 @@ struct Preprocess::Section
 };
 
 
+struct Preprocess::Chunk_state
+{
+	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
+	dur_t rel_time = 0;
+
+	inline bool operator==(const Chunk_state& x) const 
+	{ return (level == x.level) && (rel_time == x.rel_time); }
+};
+
+
 struct Preprocess::Chunk
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
-	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
-	Instance::Res res;
-	Array<idx_t> ops;
-	Array<Chunk_lock> locks;
-	Array<Chunk_unlock> unlocks;
-
+	idx_t res = IDX_MAX;
+	Chunk_state state;
+	Array<Instance::Res> ops;
 };
+
 
 struct Preprocess::Obj
 {
@@ -290,36 +286,6 @@ struct Preprocess::Level_edge
 	idx_t op = IDX_MAX;
 	inline bool operator==(const Level_edge& x) const
 	{ return (level == x.level) && (op == x.op); }
-};
-
-
-struct Preprocess::Chunk_lock
-{
-	idx_t chunk = IDX_MAX;
-	idx_t route = IDX_MAX;
-	idx_t level = IDX_MAX;
-	
-	bool operator==(const Chunk_lock& x) const
-	{ return (level == x.level); }
-
-	bool operator!=(const Chunk_lock& x) const
-	{ return !(*this == x); }
-};
-
-
-
-struct Preprocess::Chunk_unlock
-{
-	idx_t chunk = IDX_MAX;
-	idx_t route = IDX_MAX;
-	idx_t level = IDX_MAX;
-	dur_t time = IDX_MAX;
-	
-	bool operator==(const Chunk_unlock& x) const
-	{ return (level == x.level) && (time == x.time); }
-
-	bool operator!=(const Chunk_unlock& x) const
-	{ return !(*this == x); }
 };
 
 

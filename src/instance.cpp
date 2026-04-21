@@ -155,8 +155,8 @@ void Instance::parse(const json& inst_jsn)
 						this->op_res.push_back(x);
 					}
 					else {
-						dur_t& res_time = this->op_res.back().time;
-						res_time = MAX(res_time, x.time);
+						dur_t& res_time = this->op_res.back().rel_time;
+						res_time = MAX(res_time, x.rel_time);
 					}
 				}
 			}
@@ -246,7 +246,7 @@ void Instance::verify_json(const json& inst_jsn) const
 					json_update(res_time, "release_time", res_jsn);
 					
 					auto find_ptr = op.res.find_asc(res_idx);
-					assert(find_ptr != nullptr && find_ptr->time == res_time);
+					assert(find_ptr != nullptr && find_ptr->rel_time == res_time);
 
 					res_set.insert(res_idx);
 				}

@@ -59,6 +59,7 @@ public:
 	void assign_offset(C& container, I& idx, const bool clear=false);
 
 	void print(std::ostream& os) const;
+	const T& get_random_item() const;
 };
 
 
@@ -189,4 +190,12 @@ std::ostream& operator<<(std::ostream& os, const Array<T>& array)
 {
 	array.print(os);
 	return os;
+}
+
+
+template<typename T>
+const T& Array<T>::get_random_item() const
+{
+	size_t idx = (rand() % this->size());
+	return this->_begin[idx];
 }

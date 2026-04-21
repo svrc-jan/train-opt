@@ -53,14 +53,7 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
 	}
 
-	this->make_chunk_locks_unlocks();
-	if (this->chunk_locks.size() > 0) {
-		cout << "    locks:   " << this->chunk_locks.size() << endl;
-	}
-
-	if (this->chunk_unlocks.size() > 0) {
-		cout << "    unlocks: " << this->chunk_unlocks.size() << endl;
-	}
+	this->assign_op_chunks();
 
 	this->make_objs();
 }
@@ -684,13 +677,12 @@ void Preprocess::make_resource_chunks()
 				Chunk chunk = {
 					.idx = (idx_t)this->chunks.size(),
 					.train = train.idx,
-					.res = {
-						.idx = r,
-						.time = DUR_MAX
+					.res = r,
+					.state = {
+						.level = {IDX_MAX, IDX_MAX},
+						.rel_time = 0
 					},
-					.ops = {nullptr, nullptr},
-					.locks = {nullptr, nullptr},
-					.unlocks = {nullptr, nullptr}
+					.ops = {nullptr, nullptr}
 				};
 
 				chunk.ops.clear();
@@ -698,7 +690,7 @@ void Preprocess::make_resource_chunks()
 				cnt_t j = i;
 				while (j < CNT_MAX) {
 					chunk.ops.increment_size(1);
-					this->chunk_ops.push_back(ro[j].op);
+					this->chunk_ops.push_back({ro[j].op, ro[j].res_time});
 
 					j = ro[j].next;
 				}
@@ -708,6 +700,8 @@ void Preprocess::make_resource_chunks()
 		}
 	}
 
+	assert(this->n_chunks() < IDX_MAX);
+
 	assert(this->n_chunks() + this->chunk_direct_merges +
 		this->chunk_parallel_merges == this->inst.n_op_res());
 
@@ -716,12 +710,12 @@ void Preprocess::make_resource_chunks()
 		chunk.ops.assign_offset(this->chunk_ops, chunk_ops_idx, false);
 
 		for (auto o : chunk.ops) {
-			auto& op = this->inst.ops[o];
+			auto& op = this->inst.ops[o.idx];
 			
 			auto res = op.res.find(chunk.res);
 			assert(res != nullptr);
 
-			chunk.res.time = MIN(chunk.res.time, res->time);
+			chunk.state.rel_time = MIN(chunk.state.rel_time, o.rel_time);
 		}
 	}
 }
@@ -742,6 +736,9 @@ bool Preprocess::merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r,
 		while (k < CNT_MAX) {
 			if (!connect_valid) {
 				if (op.pred.find(ro[k].op) != nullptr) {
+					connect_valid = true;
+				}
+				else if (op.succ.find(ro[k].op) != nullptr) {
 					connect_valid = true;
 				}
 			}
@@ -866,6 +863,32 @@ bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
 	return false;
 }
 
+void Preprocess::assign_op_chunks()
+{
+	for (auto op : this->ops) {
+		op.chunks.clear();
+	}
+
+	for (auto& chunk : chunks) {
+		for (auto& o : chunk.ops) {
+			this->ops[o.idx].chunks.increment_size(1);
+		}
+	}
+
+	this->op_chunks.resize(this->chunk_ops.size());
+	size_t op_chunks_idx = 0;
+	for (auto& op : this->ops) {
+		op.chunks.assign_offset(this->op_chunks, op_chunks_idx, true);
+	}
+
+	assert(op_chunks_idx == this->op_chunks.size());
+	for (auto& chunk : chunks) {
+		for (auto& o : chunk.ops) {
+			this->ops[o.idx].chunks.push_back(chunk.idx);
+		}
+	}
+}
+
 
 void Preprocess::make_objs()
 {
@@ -936,166 +959,6 @@ void Preprocess::make_junction_bounds()
 				auto& op = this->inst.ops[succ.op];
 				junct.time_lb = MIN(junct.time_lb, op.start_lb);
 				junct.time_ub = MAX(junct.time_ub, op.start_ub);
-			}
-		}
-	}
-}
-
-void Preprocess::make_chunk_locks_unlocks()
-{
-	vector<Chunk_lock> curr_locks;
-	vector<Chunk_unlock> curr_unlocks;
-
-	this->chunk_locks.clear();
-	this->chunk_unlocks.clear();
-
-	for (auto& route : this->routes) {
-		route.chunk_locks.clear();
-		route.chunk_unlocks.clear();
-	}
-
-	for (auto& chunk : this->chunks) {
-		get_chunk_locks(curr_locks, chunk);
-		get_chunk_unlocks(curr_unlocks, chunk);
-
-		bool need_locks = false;
-		for (auto& lock : curr_locks | views::drop(1)) {
-			if (lock != curr_locks[0]) {
-				need_locks = true;
-				break;
-			}
-		}
-
-		chunk.locks.clear();
-		if (need_locks) {
-			chunk.level.start = 0;
-
-			for (auto& lock : curr_locks) {
-				chunk.level.start = MAX(chunk.level.start, lock.level);
-				
-				chunk.locks.increment_size(1);
-				this->routes[lock.route].chunk_locks.increment_size(1);
-				this->chunk_locks.push_back(lock);
-			}
-		}
-		else {
-			chunk.level.start = curr_locks[0].level;
-		}
-
-		bool need_unlocks = false;
-		for (auto& unlock : curr_unlocks | views::drop(1)) {
-			if (unlock != curr_unlocks[0]) {
-				need_unlocks = true;
-				break;
-			}
-		}
-
-		chunk.unlocks.clear();
-		if (need_unlocks) {
-			chunk.level.end = IDX_MAX;
-			chunk.res.time = DUR_MAX;
-
-			for (auto& unlock : curr_unlocks) {
-				chunk.level.end = MIN(chunk.level.end, unlock.level);
-				chunk.res.time = MIN(chunk.res.time, unlock.time);
-
-				chunk.unlocks.increment_size(1);
-				this->routes[unlock.route].chunk_unlocks.increment_size(1);
-				this->chunk_unlocks.push_back(unlock);
-			}
-		}
-		else {
-			chunk.level.end = curr_unlocks[0].level;
-			chunk.res.time = curr_unlocks[0].time;
-		}
-	}
-
-	size_t lock_idx = 0;
-	size_t unlock_idx = 0;
-
-	for (auto& chunk : this->chunks) {
-		chunk.locks.assign_offset(this->chunk_locks, lock_idx, false);
-		chunk.unlocks.assign_offset(this->chunk_unlocks, unlock_idx, false);
-	}
-
-	lock_idx = 0;
-	unlock_idx = 0;
-
-	this->route_locks.resize(this->chunk_locks.size());
-	this->route_unlocks.resize(this->chunk_unlocks.size());
-
-	for (auto& route : this->routes) {
-		route.chunk_locks.assign_offset(this->route_locks, lock_idx, true);
-		route.chunk_unlocks.assign_offset(this->route_unlocks, unlock_idx, true);
-	}
-
-	for (auto& lock : this->chunk_locks) {
-		this->routes[lock.route].chunk_locks.push_back(lock);
-	}
-
-	for (auto& unlock : this->chunk_unlocks) {
-		this->routes[unlock.route].chunk_unlocks.push_back(unlock);
-	}
-}
-
-void Preprocess::get_chunk_locks(std::vector<Chunk_lock>& locks, const Chunk& chunk)
-{
-	locks.clear();
-
-	for (auto o : chunk.ops) {
-		auto& op = this->ops[o];
-		auto op_res = op.inst->res.find(chunk.res.idx);
-		assert(op_res != nullptr);
-
-		if (op.inst->n_pred() == 0) {
-			locks.push_back({
-				.chunk = chunk.idx,
-				.route = op.route,
-				.level = op.level.start,
-			});
-		}
-
-		for (auto p : op.inst->pred) {
-			auto& op_pred = this->ops[p];
-			if (op_pred.inst->res.find(chunk.res.idx) == nullptr) {
-				locks.push_back({
-					.chunk = chunk.idx,
-					.route = op_pred.route,
-					.level = op.level.start,
-				});
-			}
-		}
-	}
-}
-
-
-void Preprocess::get_chunk_unlocks(std::vector<Chunk_unlock>& unlocks, const Chunk& chunk)
-{
-	unlocks.clear();
-
-	for (auto o : chunk.ops) {
-		auto& op = this->ops[o];
-		auto op_res = op.inst->res.find(chunk.res.idx);
-		assert(op_res != nullptr);
-
-		if (op.inst->n_succ() == 0) {
-			unlocks.push_back({
-				.chunk = chunk.idx,
-				.route = op.route,
-				.level = op.level.end,
-				.time = op_res->time,
-			});
-		}
-
-		for (auto s : op.inst->succ) {
-			auto& op_succ = this->ops[s];
-			if (op_succ.inst->res.find(chunk.res) == nullptr) {
-				unlocks.push_back({
-					.chunk = chunk.idx,
-					.route = op_succ.route,
-					.level = op.level.end,
-					.time = op_res->time,
-				});
 			}
 		}
 	}

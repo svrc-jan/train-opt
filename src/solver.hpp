@@ -7,6 +7,8 @@
 #include "instance.hpp"
 #include "preprocess.hpp"
 #include "event_graph.hpp"
+#include "conflict_resolver.hpp"
+#include "route_planner.hpp"
 
 
 enum Solver_state
@@ -20,18 +22,15 @@ enum Solver_state
 	SLVR_ADD_CONFLICT
 };
 
+class Route_planner;
+class Conflict_resolver;
+
+
 class Solver
 {
 public:
-	struct Obj;
 	struct Route;
 	struct Chunk;
-
-	struct Conflict;
-	struct Var_assign;
-	struct Cycle_cons;
-	struct Route_cons;
-	struct Path_cons;
 
 	const Instance& inst;
 	const Preprocess& prepr;
@@ -39,6 +38,7 @@ public:
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
+	typedef Preprocess::Chunk_state Chunk_state;
 
 	typedef Event_graph::edg_t edg_t; 
 	typedef Event_graph::vtx_t vtx_t; 
@@ -56,143 +56,65 @@ public:
 
 	void solve();
 
+	friend class Conflict_resolver;
+	friend class Route_planner;
+
 private:
 	GRBEnv& grb_env;
-	GRBModel model;
-
-	double obj_val = 0;
-
-	enum Solver_state state;
-
-	size_t n_routes = 0;
-	std::vector<Obj> objs = {};
-	std::vector<Route> routes = {};
-	std::vector<Conflict> conflicts = {};
-
-	std::vector<std::vector<idx_t>> res_chunks; 
-	std::vector<Chunk> chunks = {};
-
-	std::vector<GRBConstr> route_cons = {};
-	std::vector<Cycle_cons> cycle_cons = {};
-	std::vector<Path_cons> path_cons = {};
-
 	Event_graph event_graph;
 
-	idx_t curr_train = IDX_MAX;
+	std::unique_ptr<Route_planner> route_plnr = nullptr;
+	std::unique_ptr<Conflict_resolver> conf_rslvr = nullptr;
 
-	std::set<edg_t> assign_set;
+	std::vector<Chunk> chunks = {};
+	std::vector<std::set<idx_t>> level_chunks = {};
+
+	uint8_t need_level_time_sync = false;
+	uint8_t need_chunk_state_sync = false;
+	uint8_t need_chunk_time_sync = false;
+	uint8_t need_res_chunks_sync = false;
+	
+	Flag level_time_dirty;
+	Flag chunk_state_dirty;
+	Flag chunk_time_dirty;
+	Flag res_chunks_dirty;
+
+	std::vector<Array<Chunk*>> res_chunks = {};
+	std::vector<Chunk*> res_chunks_data = {};
+
+	std::vector<idx_t> need_list = {};
 
 	void init_data();
-	void init_objs();
-	void init_routes();
 	void init_chunks();
+	void init_res_chunks();
 
-
-	void solver_loop();
+	void sync_level_times();
+	void sync_chunk_state();
+	void sync_chunk_times();
+	void sync_res_chunks();
 	
-	void optimize_model();
-
-	void update_values();
-	
-	void update_graph();
-	bool update_route_edges();
-	bool update_conf_edges();
-	void add_cycle_cons();
-
-	void update_objs();
-	bool add_obj_cons();
-
-	bool add_conflict();
-
-	void clear_model();
-	void freeze_conflicts();
-
-	std::vector<Var_assign> collect_assigns(
-		const std::vector<Event_graph::Vertex_edge>& path);
-	
+	void update_level_chunks(idx_t c, idx_t l_old, idx_t l_new);
 };
 
-struct Solver::Obj
-{
-	tim_t value = 0;
-	GRBVar var;
-	const Preprocess::Obj* prepr;
-};
-
-
-struct Solver::Route
-{
-	uint8_t value = 0;
-	uint8_t in_graph = 0;
-	uint8_t in_chunks = 0;
-	uint8_t in_model = 0;
-	GRBVar var;
-
-	const Preprocess::Route* prepr;
-};
 
 struct Solver::Chunk
 {
-	Interval<tim_t> tim = {0, TIM_MAX};
+	Chunk_state state;
+	Interval<tim_t> time = {0, TIM_MAX};
 	const Preprocess::Chunk* prepr = nullptr;
+	std::vector<idx_t> conflicts = {};
 
-	inline bool operator<(const Chunk& x) const { return tim < x.tim; }
-	inline bool operator==(const Chunk& x) const { return tim == x.tim; }
-};
-
-struct Solver::Conflict
-{
-	idx_t idx = IDX_MAX;
-	uint8_t value = 1;
-	uint8_t in_model = 0;
-
-	uint8_t graph_update = true;
-	Edge graph_edge = Edge();
-
-	GRBVar var;
-
-	std::pair<
-		const Preprocess::Chunk*, 
-		const Preprocess::Chunk*
-	> chunks = {nullptr, nullptr};
-};
-
-
-
-
-
-struct Solver::Var_assign
-{
-	mutable GRBVar var;
-	uint8_t value = 0;
-
-	inline bool operator==(const Var_assign& x) const
-	{ return value == x.value && var.sameAs(x.var); }
+	inline bool operator<(const Chunk& x) const { return this->time < x.time; }
+	// inline bool operator==(const Chunk& x) const { return this->time == x.time; }
 	
-	inline GRBLinExpr to_expr() const
-	{ return (value == 1) ? var : (1 - var); } 
+	inline bool is_active() const 
+	{ return (state.level.start < IDX_MAX) && (state.level.end < IDX_MAX); }
+
+	inline bool has_active_time() const
+	{ return (time.start < TIM_MAX) && (time.end < TIM_MAX); }
+
+
+	static bool ptr_cmp(const Chunk* const a, const Chunk* const b) { return a->time < b->time; }
 };
 
 
-struct Solver::Cycle_cons
-{
-	uint8_t in_model = false;
-	std::vector<Var_assign> assigns = {};
-	GRBConstr model_cons;
-	
-	void add_to_model(GRBModel& model);
-	void remove_from_model(GRBModel& model);
-};
-
-
-struct Solver::Path_cons
-{
-	uint8_t in_model = false;
-	tim_t delay = 0;
-	const Obj* obj = nullptr;
-	std::vector<Var_assign> assigns = {};
-	GRBConstr model_cons;
-
-	void add_to_model(GRBModel& model);
-	void remove_from_model(GRBModel& model);
-};

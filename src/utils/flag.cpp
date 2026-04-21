@@ -100,29 +100,18 @@ size_t Flag::get_true_count() const
 
 vector<size_t> Flag::get_true_list() const
 {
-	vector<size_t> res = {};
+	vector<size_t> ret = {};
 	
 	size_t true_count = this->get_true_count();
 	if (true_count == 0) {
 		return {};
 	}
 
-	res.reserve(true_count);
+	ret.reserve(true_count);
+	this->get_true_list<vector<size_t>, false>(ret);
 
-	size_t size = this->req_size();
-	for (size_t i = 0; i < size; i++) {
-		uint64_t item = this->data[i];
-		for (size_t j = 0; item != 0 && j < 64; j++) {
-			if (item & (uint64_t)1) {
-				res.push_back(i*64 + j);
-			}
-			item >>= 1;
-		}
-	}
-
-	return res;
+	return ret;
 }
-
 
 
 void Flag::alloc_data(const size_t new_size)

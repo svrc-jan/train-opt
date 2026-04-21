@@ -7,10 +7,14 @@ using namespace std;
 
 
 Solver::Solver(const Preprocess& prepr, GRBEnv& grb_env)
-	: inst(prepr.inst), prepr(prepr), grb_env(grb_env), model(grb_env)
+	: inst(prepr.inst), prepr(prepr), grb_env(grb_env)
 {
-	this->init_data();
+
+	this->route_plnr = unique_ptr<Route_planner>(new Route_planner(*this));
+	this->conf_rslvr = unique_ptr<Conflict_resolver>(new Conflict_resolver(*this));
+
 	this->event_graph.set_n_vtx(prepr.n_levels());
+	this->init_data();
 }
 
 
@@ -20,424 +24,218 @@ Solver::~Solver()
 }
 
 
+void Solver::solve()
+{
+	this->route_plnr->assign_all_random_sections();
+	this->sync_res_chunks();
+}
+
+
 void Solver::init_data()
 {
-	this->init_objs();
-	this->init_routes();
-}
+	this->level_time_dirty.set_n_items(this->prepr.n_levels());
+	this->init_chunks();
 
-
-void Solver::init_objs()
-{
-	this->objs.resize(this->prepr.n_objs());
-	for (auto& obj_p : this->prepr.objs) {
-		auto& obj = this->objs[obj_p.idx];
-		obj.prepr = &obj_p;
-	}
-}
-
-
-void Solver::init_routes()
-{
-	this->n_routes = this->prepr.n_routes();
-	this->routes.resize(this->n_routes);
-
-	for (auto& route_p : this->prepr.routes) {
-		auto& route = this->routes[route_p.idx];
-		route.prepr = &route_p;
-	}
+	this->route_plnr->init_data();
+	this->conf_rslvr->init_data();
 }
 
 
 void Solver::init_chunks()
 {
-	size_t n_res = this->inst.n_res;
-	this->res_chunks.resize(n_res);
-	for (auto r : this->inst.res_range()) {
-		this->res_chunks[r].reserve(this->prepr.res_n_chunks[r]);
-	}
-	
+	this->chunk_time_dirty.set_n_items(this->prepr.n_chunks());
+	this->chunk_state_dirty.set_n_items(this->prepr.n_chunks());
+
 	this->chunks.resize(this->prepr.n_chunks());
 	for (auto& chunk : this->prepr.chunks) {
 		this->chunks[chunk.idx].prepr = &chunk;
 	}
-	
-	for (auto& o : this->prepr.ops_req) {
-		auto& chunk = this->prepr.chunks[this->prepr.ops[o].chunk];
-		this->res_chunks[chunk.res.idx].push_back(chunk.idx);
-	}
+
+	this->init_res_chunks();
 }
 
 
-void Solver::solve()
+void Solver::init_res_chunks()
 {
-	for (auto t : this->inst.trains_range()) {
-		this->solver_loop();
+	this->res_chunks_dirty.set_n_items(this->inst.n_res);
+	this->res_chunks.resize(this->inst.n_res);
+	this->res_chunks_data.resize(this->prepr.n_chunks());
+
+	auto res_range = this->inst.res_range();
+
+	size_t chunk_cnt[this->inst.n_res];
+
+	for (auto r : res_range) {
+		this->res_chunks[r].set_size(0);
+		chunk_cnt[r] = 0;
 	}
-}
+
+	for (auto& chunk : this->prepr.chunks) {
+		chunk_cnt[chunk.res] += 1;
+	}
+
+	size_t res_chunk_idx = 0;
+	for (auto r : res_range) {
+		res_chunks[r].assign_offset(this->res_chunks_data, res_chunk_idx, true);
+	}
+	assert(res_chunk_idx == this->prepr.n_chunks());
+
+	for (auto& chunk : this->chunks) {
+		res_chunks[chunk.prepr->res].push_back(&chunk);
+	}
+};
 
 
-void Solver::solver_loop()
+void Solver::sync_level_times()
 {
-	while (this->state != SLVR_DONE && this->state != SLVR_FAIL) {
-		switch (this->state)	{
-		  case SLVR_OPTIMIZE_MODEL:
-			this->optimize_model();
-			break;
-		
-		  case SLVR_UPDATE_VALUES:
-		    this->update_values();
-			break;
-		
-		  case SLRV_UPDATE_GRAPH:
-			this->update_graph();
-			break;
-
-		  case SLVR_UPDATE_OBJ:
-			this->update_objs();
-			break;
-
-		  case SLVR_ADD_CONFLICT:
-			this->add_conflict();
-			break;
-		
-		  default:
-			assert(this->state == SLVR_DONE || this->state == SLVR_FAIL);
-			break;
-		}
-	}
-
-	if (this->state == SLVR_FAIL) {
-		cout << "solver failed" << endl;
-	}
-}
-
-
-
-
-void Solver::optimize_model()
-{
-	this->state = SLVR_UPDATE_VALUES; // if not fail
-	int status;
-	try {
-		this->model.update();
-		this->model.optimize();
-		status = this->model.get(GRB_IntAttr_Status);
-		if (status == GRB_OPTIMAL) {
-			this->obj_val = this->model.get(GRB_DoubleAttr_ObjVal);
-		}
-		
-	}
-	catch (const GRBException& ex) {
-		cout << "ERROR: optimization exception: " << ex.getMessage() << ", code: " << ex.getErrorCode() << endl;
-		this->state = SLVR_FAIL;
-	}
-
-	if (status != GRB_OPTIMAL) {
-		cout << "ERROR: model optim failed, status: " << status << endl;
-		this->state = SLVR_FAIL;
-	}
-}
-
-
-void Solver::update_values()
-{
-	bool need_graph_update = false;
-
-	for (auto& obj : this->objs) {
-		obj.value = round(obj.var.get(GRB_DoubleAttr_X));
-	}
-
-	for (auto& route : this->routes) {
-		if (route.in_model) {
-			route.value = route.var.get(GRB_DoubleAttr_X) > 0.5;
-		}
-	}
-
-	for (auto& conf : this->conflicts) {
-		if (conf.in_model) {
-
-			uint8_t new_val = conf.var.get(GRB_DoubleAttr_X) > 0.5;
-			if (new_val != conf.value) {
-				conf.graph_update = true;
-			}
-		}
-	}
-
-}
-
-
-void Solver::update_graph()
-{
-	bool changed = false;
-
-	if (this->update_route_edges()) {
-		changed = true;
-	}
-
-	if (this->update_conf_edges()) {
-		changed = true;
-	}
-
-	this->state = SLVR_UPDATE_OBJ;
-	if (changed) {
-		if (this->event_graph.update()) {
-			this->add_cycle_cons();
-			this->state = SLVR_OPTIMIZE_MODEL;
-		}
-	}
-}
-
-
-bool Solver::update_route_edges()
-{
-	bool changed = false;
-	for (auto& route : this->routes) {
-		if (route.in_graph == 0 && route.value == 1) {
-			for (auto o : route.prepr->ops) {
-				auto& op = this->prepr.ops[o];
-
-				Edge edge = {{op.level.start, op.level.end},
-					route.prepr->idx, op.inst->dur};
-			
-				this->event_graph.add_edge(edge);
-			}
-			route.in_graph = 1;
-			changed = true;
-		}
-		
-		if (!route.in_graph == 1 && route.value == 0) {
-			for (auto o : route.prepr->ops) {
-				auto& op = this->prepr.ops[o];
-
-				Edge edge = {{op.level.start, op.level.end},
-					route.prepr->idx, op.inst->dur};
-
-				bool removed = this->event_graph.remove_edge(edge);
-				assert(removed);
-			}
-			route.in_graph = 1;
-			changed = true;
-		}
-	}
-
-	return changed;
-}
-
-
-bool Solver::update_conf_edges()
-{
-	assert(this->n_routes + this->conflicts.size() < EDG_MAX);
-
-	bool changed = false;
-
-	for (auto& conf : this->conflicts) {
-		if (conf.graph_update == 0) {
-			continue;
-		}
-		
-
-		edg_t edge_idx = (edg_t)conf.idx + (edg_t)this->n_routes;
-		Edge new_edge;
-		if (conf.value == 1) {
-			new_edge = {{conf.chunks.first->level.end, conf.chunks.second->level.start},
-				conf.chunks.first->res.time, edge_idx};
-		}
-		else {
-			new_edge = {{conf.chunks.second->level.end, conf.chunks.first->level.end},
-				conf.chunks.second->res.time, edge_idx};
-		}
-
-		if (new_edge != conf.graph_edge) {
-			if (conf.graph_edge.v.start != EDG_MAX) {
-				bool removed = this->event_graph.remove_edge(conf.graph_edge);
-				assert(removed);
-			}
-
-			this->event_graph.add_edge(new_edge);
-			conf.graph_edge = new_edge;
-
-			bool changed = false;
-		}
-	}
-
-	return changed;
-}
-
-
-vector<Solver::Var_assign> Solver::collect_assigns(const vector<Event_graph::Vertex_edge>& path)
-{
-	this->assign_set.clear();
-	for (auto& x : path) {
-		if (x.e < EDG_MAX) {
-			assert(x.e < this->n_routes + this->conflicts.size());
-			this->assign_set.insert(x.e);
-		}
-	}
-
-	vector<Solver::Var_assign> assigns = {};
-	for (auto& x : this->assign_set) {
-		if (x < this->n_routes) {
-			auto& route = this->routes[x];
-			if (route.in_graph) {
-				assigns.push_back({route.var, route.value});
-			}
-		}
-		else {
-			auto& conf = this->conflicts[x - this->n_routes];
-		}
-	}
-
-	return assigns;
-}
-
-
-void Solver::add_cycle_cons()
-{
-	auto& cycle = this->event_graph.get_shortest_cycle();
-	
-	Cycle_cons cons;
-	cons.assigns = this->collect_assigns(cycle);
-	cout << cons.assigns << endl;
-	
-	assert(cons.assigns.size() >= 1);
-	cons.add_to_model(this->model);
-
-	this->cycle_cons.push_back(cons);
-}
-
-
-void Solver::update_objs()
-{
-	this->state = SLVR_ADD_CONFLICT;
-	if (add_obj_cons()) {
-		this->state = SLVR_OPTIMIZE_MODEL;
-	}
-
-}
-
-bool Solver::add_obj_cons()
-{
-	tim_t max_diff = 0;
-	tim_t max_delay = 0;
-	const Obj* max_obj = nullptr;
-	
-
-	for (auto& obj : this->objs) {
-		if (obj.prepr->is_bin && obj.value == 1) {
-			continue;
-		}
-
-		tim_t tim = this->event_graph.time[obj.prepr->level];
-		if (tim < obj.prepr->threshold) {
-			continue;
-		}
-
-		tim_t delay = tim - obj.prepr->threshold;
-		if (delay <= obj.value) {
-			continue;
-		}
-
-		time_t diff = obj.prepr->is_bin ? 
-			obj.prepr->coeff : 
-			obj.prepr->coeff*(delay - obj.value);
-
-		if (max_diff < diff) {
-			max_diff = diff;
-			max_delay = delay;
-			max_obj = &obj;
-		}
-	}
-
-	if (max_obj == nullptr) {
-		return false;
-	}
-
-	auto& path = this->event_graph.get_critical_path(max_obj->prepr->level);
-
-	Path_cons cons = {
-		.in_model = false,
-		.delay = max_delay,
-		.obj = max_obj,
-		.assigns = this->collect_assigns(path)
-	};
-	
-	cons.add_to_model(this->model);
-	this->path_cons.push_back(cons);
-
-	return true;
-}
-
-
-bool Solver::add_conflict()
-{	
-	for (auto& x : this->conflicts) {
-		
-	}
-}
-
-void Solver::freeze_conflicts()
-{
-	for (auto& x : this->conflicts) {
-		
-	}
-}
-
-
-void Solver::Cycle_cons::add_to_model(GRBModel& model)
-{
-	if (this->in_model) {
+	if (!this->need_level_time_sync) {
 		return;
 	}
+
+	this->route_plnr->sync_op_graph();
+
+	this->level_time_dirty.clear();
+	this->event_graph.sync_time(this->level_time_dirty);
 	
-	GRBLinExpr expr(0);
-	for (auto x : this->assigns) {
-		expr += x.to_expr();
+	level_time_dirty.get_true_list(this->need_list);
+	for (auto l : this->need_list) {
+		for (auto c : this->level_chunks[l]) {
+			chunk_time_dirty += c;
+			need_chunk_time_sync = true;
+		}
 	}
 
-	this->model_cons = model.addConstr(expr <= assigns.size() - 1);
-	this->in_model = true;
+	this->need_level_time_sync = false;
 }
 
 
-void Solver::Cycle_cons::remove_from_model(GRBModel& model)
+void Solver::sync_chunk_state()
 {
-	if (this->in_model) {
-		model.remove(this->model_cons);
-		this->in_model = false;
-	}
-}
-
-
-void Solver::Path_cons::add_to_model(GRBModel& model)
-{
-	if (this->in_model) {
+	if (!this->need_chunk_state_sync) {
 		return;
 	}
-	
-	GRBLinExpr expr(0);
-	for (auto x : this->assigns) {
-		expr += x.to_expr();
+
+	this->route_plnr->sync_route_ops();
+	this->chunk_state_dirty.get_true_list(this->need_list);
+
+	for (auto c : this->need_list) {
+		Chunk& chunk = this->chunks[c];
+		Chunk_state new_state;
+
+		for (auto chunk_op : chunk.prepr->ops) {
+			if (this->route_plnr->is_op_active[chunk_op.idx]) {
+				auto& op = this->prepr.ops[chunk_op.idx];
+				
+				new_state.level.start = (new_state.level.start == IDX_MAX) ? 
+					op.level.start : new_state.level.start;
+
+				new_state.level.end = op.level.end;
+				new_state.rel_time = chunk_op.rel_time;
+			}
+		}
+
+		if (chunk.state != new_state) {
+			this->update_level_chunks(chunk.prepr->idx, 
+				chunk.state.level.start, new_state.level.start);
+
+			this->update_level_chunks(chunk.prepr->idx, 
+				chunk.state.level.end, new_state.level.end);
+
+			chunk.state = new_state;
+			this->chunk_time_dirty += chunk.prepr->idx;
+		}
 	}
 
-	size_t n_assigns = this->assigns.size();
+	this->chunk_state_dirty.clear();
+	this->need_chunk_state_sync = false;
+}
 
-	if (this->obj->prepr->is_bin) {
-		this->model_cons = model.addConstr((expr - n_assigns + 1) <= this->obj->var);
+
+void Solver::update_level_chunks(idx_t c, idx_t l_old, idx_t l_new)
+{
+	if (l_old == l_new) {
+		return;
 	}
+
+	if (l_old < IDX_MAX) {
+		auto ret = this->level_chunks[l_old].erase(c);
+		assert(ret);
+	}
+
 	else {
-		this->model_cons = model.addConstr((expr - n_assigns + 1)*this->delay <= this->obj->var);
+		auto ret = this->level_chunks[l_new].insert(c);
+		assert(ret.second);
 	}
-	
-	this->in_model = true;
 }
 
 
-void Solver::Path_cons::remove_from_model(GRBModel& model)
+void Solver::sync_chunk_times()
 {
-	if (this->in_model) {
-		model.remove(this->model_cons);
-		this->in_model = false;
+	if (!this->need_chunk_time_sync) {
+		return;
 	}
+
+	this->sync_chunk_state();
+	this->sync_level_times();
+
+	this->chunk_time_dirty.get_true_list(this->need_list);
+	for (auto c : this->need_list) {
+		Chunk& chunk = this->chunks[c];
+
+		Interval<tim_t> new_time;
+
+		if (chunk.is_active()) {
+			new_time.start = this->event_graph.time[chunk.state.level.start];
+			new_time.end = this->event_graph.time[chunk.state.level.end] +
+				chunk.state.rel_time;
+		}
+		else {
+			new_time = {TIM_MAX, TIM_MAX};
+		}
+
+		if (chunk.time != new_time) {
+			chunk.time = new_time;
+
+			this->res_chunks_dirty += chunk.prepr->res;
+			this->need_res_chunks_sync = true;
+		}
+	}
+
+	this->chunk_time_dirty.clear();
+	this->need_chunk_time_sync = false;
 }
 
+
+void Solver::sync_res_chunks()
+{
+	if (!this->need_res_chunks_sync) {
+		return;
+	}
+
+	this->sync_chunk_times();
+
+	this->res_chunks_dirty.get_true_list(this->need_list);
+	for (auto r : this->need_list) {
+		auto& rc = this->res_chunks[r];
+
+		size_t i = 0;
+		size_t j = rc.size() - 1;
+
+		while (i < j) {
+			if (!rc[i]->has_active_time()) {
+				swap(rc[i], rc[j]);
+				j--;
+			}
+			else {
+				assert(rc[i]->is_active());
+				i++;
+			}
+		}
+
+		sort(&rc[0], &rc[j], Chunk::ptr_cmp);
+	}
+
+
+	this->res_chunks_dirty.clear();
+	this->need_res_chunks_sync = false;
+}

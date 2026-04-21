@@ -35,6 +35,8 @@ int main(int argc, char const *argv[])
 		// 	cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_req << endl;
 		// }
 	}
-	
+
+	cout << "chunk size: " << sizeof(Preprocess::Chunk) << endl;
+
 	return 0;
 }

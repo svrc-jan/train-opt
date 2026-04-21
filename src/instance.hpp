@@ -88,7 +88,7 @@ private:
 struct Instance::Res
 {
 	idx_t idx = IDX_MAX;
-	dur_t time = 0;
+	dur_t rel_time = 0;
 
 	bool operator<(const Res& other) const { return this->idx < other.idx; }
 	bool operator==(const Res& other) const { return this->idx == other.idx; }
