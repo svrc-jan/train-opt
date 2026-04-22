@@ -326,16 +326,15 @@ void Event_graph::update_cycle_paths()
 }
 
 
-void Event_graph::sync_time(Flag& time_change)
+bool Event_graph::sync_time(Flag& time_change)
 {
 	if (!this->need_time_sync) {
-		return;
+		return false;
 	}
 	
 	this->time_dirty.get_true_list(this->need_list);
-
 	if (this->need_list.empty()) {
-		return;
+		return false;
 	}
 
 	this->visited.clear();
@@ -346,12 +345,17 @@ void Event_graph::sync_time(Flag& time_change)
 		this->update_time_stack(v);
 	}
 
+	bool changed = false;
 	for (vtx_t v : this->update_stack | views::reverse) {
-		this->update_time_clear(v, time_change);
+		if (this->update_time_clear(v, time_change)) {
+			changed = true;
+		};
 	}
 
 	this->time_dirty.clear();
 	this->need_time_sync = false;
+
+	return changed;
 }
 
 
@@ -375,7 +379,7 @@ void Event_graph::update_time_stack(vtx_t v)
 }
 
 
-void Event_graph::update_time_clear(vtx_t v, Flag& time_change)
+bool Event_graph::update_time_clear(vtx_t v, Flag& time_change)
 {
 	assert(this->visited[v]);
 
@@ -400,7 +404,10 @@ void Event_graph::update_time_clear(vtx_t v, Flag& time_change)
 	this->visited -= v;
 	if (old_time != this->time[v]) {
 		time_change += v;
+		return true;
 	}
+
+	return false;
 }
 
 

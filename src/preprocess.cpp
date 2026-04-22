@@ -57,9 +57,6 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
 	}
 
-	this->make_chunk_links();
-	cout << "  links:   " << this->chunk_fix_links.size() << endl;
-
 	this->make_objs();
 }
 
@@ -753,7 +750,7 @@ void Preprocess::make_resource_chunks()
 					.train = train.idx,
 					.res = r,
 					.state = {
-						.level = {IDX_MAX, IDX_MAX},
+						.level = {0, IDX_MAX},
 						.rel_time = 0
 					},
 					.ops = {nullptr, nullptr},
@@ -788,11 +785,13 @@ void Preprocess::make_resource_chunks()
 		chunk.ops.assign_offset(this->chunk_ops, chunk_ops_idx, false);
 
 		for (auto o : chunk.ops) {
-			auto& op = this->inst.ops[o.idx];
+			auto& op = this->ops[o.idx];
 			
-			auto res = op.res.find(chunk.res);
+			auto res = op.inst->res.find(chunk.res);
 			assert(res != nullptr);
 
+			chunk.state.level.start = MAX(chunk.state.level.start, op.level.start);
+			chunk.state.level.end = MAX(chunk.state.level.end, op.level.end);
 			chunk.state.rel_time = MIN(chunk.state.rel_time, o.rel_time);
 		}
 	}
@@ -966,242 +965,3 @@ void Preprocess::assign_op_chunks()
 		}
 	}
 }
-
-
-void Preprocess::make_chunk_links()
-{
-	size_t n_chunks = this->n_chunks();
-
-	map<pair<idx_t, idx_t>, set<idx_t>> link_map;
-	map<idx_t, idx_t> x_count;
-
-	vector<set<idx_t>> fix_links(n_chunks);
-
-	for (auto& chunk : this->chunks) {
-		// pred_routes.clear();
-
-		this->make_link_map<true>(link_map, chunk);
-		this->add_fixed_link<true>(fix_links, x_count, link_map, chunk);
-
-		// this->make_link_map<false>(link_map, chunk);
-		// this->add_fixed_link<false>(fix_links, x_count, link_map, chunk);
-	}
-
-	// for (auto c : chunks_range) {
-	// 	if (!fix_links[c].empty()) {
-	// 		cout << c  << " fixed: " << fix_links[c] << endl;
-	// 	}
-	// }
-
-
-	size_t fix_links_idx = 0;
-
-	for (auto& chunk : this->chunks) {
-		size_t size = fix_links[chunk.idx].size();
-		chunk.fix_links.set_size(size);
-		fix_links_idx += size;
-	}
-
-	this->chunk_fix_links.resize(fix_links_idx);
-
-	fix_links_idx = 0;
-	for (auto& chunk : this->chunks) {
-		chunk.fix_links.assign_offset(this->chunk_fix_links, fix_links_idx, true);
-		
-		for (auto x : fix_links[chunk.idx]) {
-			chunk.fix_links.push_back(x);
-		}
-
-		for (auto x : chunk.fix_links) {
-			bool op_connect = true;
-			bool pred_connect = true;
-
-			for (auto o : chunk.ops) {
-				auto& op = this->ops[o.idx];
-			}
-
-			for (auto o : chunk.ops) {
-				auto& op = this->ops[o.idx];
-
-				bool op_connect = (op.chunks.find(x) != nullptr);
-				
-				bool succ_connect = true;
-				for (auto s : op.inst->succ) {
-					auto& succ = this->ops[s];
-					if (succ.chunks.find(x) == nullptr) {
-						succ_connect = false;
-						break;
-					}
-				}
-
-				for (auto s : op.inst->succ) {
-					auto& succ = this->ops[s];
-					if (succ.chunks.find(x) == nullptr) {
-						succ_connect = false;
-						break;
-					}
-				}
-			}
-		}
-	}
-}
-
-
-template<bool forward>
-void Preprocess::make_link_map(map<pair<idx_t, idx_t>, set<idx_t>>& link_map, const Chunk& chunk)
-{
-	link_map.clear();
-
-	for (auto& o : chunk.ops) {
-		auto& op = this->ops[o.idx];
-
-		Array<idx_t> neig_list;
-		if constexpr(forward) {
-			neig_list = op.inst->succ;
-		}
-		else {
-			neig_list = op.inst->pred;
-		}
-
-		for (auto n : neig_list) {
-			auto& neig = this->ops[n];
-
-			for (auto x : op.chunks) {
-				if (x == chunk.idx) {
-					continue;
-				}
-
-				if constexpr (forward) {
-					link_map[{op.route, neig.route}].insert(x);
-				}
-				else {
-					link_map[{neig.route, op.route}].insert(x);
-				}
-			}
-
-			for (auto x : neig.chunks) {
-				if (x == chunk.idx) {
-					continue;
-				}
-
-				if constexpr (forward) {
-					link_map[{op.route, neig.route}].insert(x);
-				}
-				else {
-					link_map[{neig.route, op.route}].insert(x);
-				}
-			}
-		}
-	}
-}
-
-
-template<bool forward>
-void Preprocess::add_fixed_link(vector<set<idx_t>>& fix_links, map<idx_t, idx_t>& x_count,
-	map<pair<idx_t, idx_t>, set<idx_t>>& link_map, const Chunk& chunk)
-{
-	x_count.clear();
-
-	for (auto it = link_map.begin(); it != link_map.end(); it++) {
-		for (auto x : it->second) {
-			x_count[x] += 1;
-		}
-	}
-
-	for (auto it = x_count.begin(); it != x_count.end(); it++) {
-		if (it->second == link_map.size()) {
-			if constexpr (forward) {
-				fix_links[chunk.idx].insert(it->first);
-			}
-			else {
-				fix_links[it->first].insert(chunk.idx);
-			}
-		}
-	}
-}
-
-
-
-
-
-void Preprocess::make_objs()
-{
-	this->objs.clear();
-	
-	vector<Obj> train_obj;
-
-	for (auto& train : this->trains) {
-		train_obj.clear();
-
-		for (auto& op : train.ops) {
-			auto& op_i = this->inst.ops[op.idx];
-			if (op_i.obj == IDX_MAX) {
-				continue;
-			}
-
-			auto& obj_i = this->inst.objs[op_i.obj];
-			Obj obj = {
-				.train = train.idx,
-				.route = op.route,
-				.level = op.level.start,
-				.is_bin = (obj_i.increment > 0),
-				.coeff = (obj_i.increment > 0) ? obj_i.increment : obj_i.coeff,
-				.n_routes = 1,
-				.threshold = obj_i.threshold
-			};
-
-			auto it = find(train_obj.rbegin(), train_obj.rend(), obj);
-			if (it == train_obj.rend()) {
-				train_obj.push_back(obj);
-			}
-			else {
-				it->route = IDX_MAX;
-				it->n_routes += 1;
-			}
-		}
-
-		train.objs.set_size(train_obj.size());
-		this->objs.insert(this->objs.end(), train_obj.begin(), train_obj.end());
-	}
-
-	size_t obj_idx = 0;
-	for (auto& train : this->trains) {
-		train.objs.assign_offset(this->objs, obj_idx, false);
-	}
-}
-
-
-void Preprocess::make_junction_bounds()
-{
-	for (auto& inst_train : this->inst.trains) {
-		auto& train = this->trains[inst_train.idx];
-
-		auto& op_last = this->inst.ops[inst_train.op_last()];
-		auto& junct_last = this->juncts[train.junct_last()];
-		
-		junct_last.time_lb = op_last.start_lb + op_last.dur;
-		junct_last.time_ub = (op_last.start_ub == TIM_MAX) ? 
-			op_last.start_ub : op_last.start_ub + op_last.dur;
-	}
-
-	for (auto& junct : this->juncts) {
-		if (!junct.succ.empty()) {
-			junct.time_lb = UINT32_MAX;
-			junct.time_ub = 0;
-
-			for (auto& succ : junct.succ) {
-				auto& op = this->inst.ops[succ.op];
-				junct.time_lb = MIN(junct.time_lb, op.start_lb);
-				junct.time_ub = MAX(junct.time_ub, op.start_ub);
-			}
-		}
-	}
-}
-
-
-void Preprocess::make_level_bounds()
-{
-
-}
-
-

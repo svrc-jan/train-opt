@@ -18,14 +18,12 @@ public:
 	struct Route;
 	struct Section;
 	struct Chunk;
-	struct Chunk_link;
 	struct Obj;
 	struct Train;
 
 	struct Junct_edge;
 	struct Level_edge;
 	struct Chunk_state;
-	struct Link_pair;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -234,24 +232,11 @@ struct Preprocess::Chunk
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
 	Chunk_state state;
-	uint8_t is_fixed = 0;
+	// uint8_t is_fixed = 0;
 	Array<Instance::Idx_dur> ops;
 	Array<idx_t> fix_links;
 };
 
-
-struct Preprocess::Link_pair
-{
-	idx_t from = IDX_MAX;
-	idx_t to = IDX_MAX;
-};
-
-
-struct Preprocess::Chunk_link
-{
-	Link_pair route;
-	Link_pair chunk;
-};
 
 
 struct Preprocess::Obj

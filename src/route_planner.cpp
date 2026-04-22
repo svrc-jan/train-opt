@@ -18,6 +18,18 @@ Route_planner::~Route_planner()
 }
 
 
+void Route_planner::make_init_routes()
+{
+	this->assign_all_random_sections();
+	this->assign_all_sections_dur(1.5);
+	this->slvr.chunk_mngr->sync_res();
+
+	this->freeze_all();
+	bool feasible = this->optimize_model();
+	assert(feasible);
+}
+
+
 void Route_planner::plan_section_range(const Interval<idx_t>& section_ivl)
 {
 	auto& sect_start = this->prepr.sects[section_ivl.start];
@@ -28,232 +40,6 @@ void Route_planner::plan_section_range(const Interval<idx_t>& section_ivl)
 
 	Interval<idx_t> level_ivl = {sect_start.level.start, sect_end.level.end};
 	// Interval<tim_t> time_ivl = {this->slvr.time(level_ivl.start), this->slvr.time(level_ivl.end)};
-
-	this->make_levels(level_ivl);
-	this->make_plan_routes(section_ivl);
-	this->make_plan_chunks();
-
-	this->optimize_model();
-}
-
-
-void Route_planner::make_levels(const Interval<idx_t>& level_ivl)
-{
-	this->slvr.sync_level_times();
-
-	this->make_level_bounds(level_ivl);
-
-	for (auto l : level_ivl.range_drop()) {
-		auto& level = this->levels[l];
-		assert(!level.is_fixed);
-		level.in_model = true;
-
-		assert(level.lb <= level.ub);
-
-		level.var = this->model.addVar(level.lb, level.ub, 0, GRB_CONTINUOUS,
-			format("level_{}", level.prepr->idx));
-
-		this->plan_vars.push_back(level.var);
-	}
-}
-
-
-void Route_planner::make_level_bounds(const Interval<idx_t>& level_ivl)
-{
-	this->slvr.sync_level_times();
-
-	for (auto l : level_ivl.range_inc()) {
-		auto& level = this->levels[l];
-		level.in_model = false;
-		if ((l == level_ivl.start) || (l == level_ivl.end)) {
-			level.is_fixed = true;
-			level.lb = this->slvr.time(l);
-			level.ub = level.lb;
-		}
-		else {
-			level.is_fixed = false;
-			level.lb = TIM_MAX;
-			level.ub = 0;
-		}
-	}
-
-	this->propagate_level_lbs(level_ivl);
-	this->propagate_level_ubs(level_ivl);
-}
-
-
-void Route_planner::propagate_level_lbs(const Interval<idx_t>& level_ivl)
-{
-	for (idx_t l = level_ivl.start; l < level_ivl.end; l++) {
-		auto& level = this->levels[l];
-		if (!level.prepr->is_req) {
-			continue;
-		}
-
-		for (auto& succ : level.prepr->succ) {
-			auto& level_succ = this->levels[succ.level];
-			if (level_succ.is_fixed) {
-				continue;
-			}
-
-			auto& op = this->inst.ops[succ.op];
-			level_succ.lb = MIN(level_succ.lb, level.lb + op.dur);
-		}
-	}
-}
-
-
-void Route_planner::propagate_level_ubs(const Interval<idx_t>& level_ivl)
-{
-	for (idx_t l = level_ivl.end; l > level_ivl.start; l--) {
-		auto& level = this->levels[l];
-		if (!level.prepr->is_req) {
-			continue;
-		}
-
-		for (auto& pred : level.prepr->pred) {
-			auto& level_pred = this->levels[pred.level];
-			if (level_pred.is_fixed) {
-				continue;
-			}
-
-			auto& op = this->inst.ops[pred.op];
-			level_pred.ub = MAX(level_pred.ub, level.ub - op.dur);
-		}
-	}
-}
-
-
-void Route_planner::make_plan_routes(const Interval<idx_t>& section_ivl)
-{
-	this->plan_chunk_set.clear();
-
-	for (auto s : section_ivl.range_inc()) {
-		auto& sect = this->prepr.sects[s];
-		for (auto r : sect.routes) {
-			auto& route = this->routes[r];
-			route.unfreeze();
-			for (auto o : route.prepr->ops) {
-				auto& op = this->prepr.ops[o];
-
-				for (auto c : op.chunks) {
-					this->plan_chunk_set.insert(c);
-				}
-
-				GRBTempConstr cons = 
-					this->levels[op.level.start].to_expr() + 
-					route.to_expr()*op.inst->dur <=
-					this->levels[op.level.end].to_expr();
-
-				this->plan_constrs.push_back(this->model.addConstr(cons,
-					format("dur_{}", op.idx)));
-			}
-		}
-	}
-}
-
-
-void Route_planner::make_plan_chunks()
-{
-	for (auto c : this->plan_chunk_set) {
-		auto& chunk = this->chunks[c];
-
-		chunk.lb = {TIM_MAX, TIM_MAX};
-		chunk.ub = {0, 0};
-
-		
-		for (auto o : chunk.prepr->ops) {
-			auto& op = this->prepr.ops[o.idx];
-
-			auto& level_start = this->levels[op.level.start];
-			auto& level_end = this->levels[op.level.end];
-			
-
-			size_t rel_time = o.rel_time + round(
-				op.inst->dur*this->res_dur_stretch);
-			rel_time = MIN(rel_time, DUR_MAX - 1);
-
-			chunk.lb.start = MIN(chunk.lb.start, level_start.lb);
-			chunk.lb.end = MIN(chunk.lb.end, level_end.lb + rel_time);
-
-			chunk.ub.start = MAX(chunk.ub.start, level_start.ub);
-			chunk.ub.end = MAX(chunk.ub.end, level_end.ub + rel_time);
-
-			assert(chunk.lb.start <= chunk.ub.start);
-			assert(chunk.lb.end <= chunk.ub.end);
-
-		}
-
-		chunk.var.start = this->model.addVar(chunk.lb.start, chunk.ub.start, 0, GRB_CONTINUOUS,
-			format("chunk_{}_start", chunk.prepr->idx));
-
-		chunk.var.end = this->model.addVar(chunk.lb.end, chunk.ub.end, 0, GRB_CONTINUOUS,
-			format("chunk_{}_start", chunk.prepr->idx));
-
-		
-		this->plan_vars.push_back(chunk.var.start);
-		this->plan_vars.push_back(chunk.var.end);
-
-		
-		for (auto o : chunk.prepr->ops) {
-			auto& op = this->prepr.ops[o.idx];
-
-			auto& level_start = this->levels[op.level.start];
-			auto& level_end = this->levels[op.level.end];
-			
-
-			size_t rel_time = o.rel_time + round(
-				op.inst->dur*this->res_dur_stretch);
-
-			rel_time = MIN(rel_time, DUR_MAX - 1);
-
-			size_t M = chunk.ub.start - level_start.lb;
-			GRBTempConstr cons_start = chunk.var.start <=
-				level_start.to_expr() + M*(1 - this->routes[op.route].to_expr());
-
-			M = level_end.ub + rel_time - chunk.lb.end;
-			GRBTempConstr cons_end = chunk.var.end >=
-				level_end.to_expr() + rel_time - M*(1 - this->routes[op.route].to_expr());
-
-			this->plan_constrs.push_back(this->model.addConstr(cons_start,
-				format("chunk_{}_start_{}", chunk.prepr->idx, o.idx)));
-
-			this->plan_constrs.push_back(this->model.addConstr(cons_end,
-				format("chunk_{}_end_{}", chunk.prepr->idx, o.idx)));
-		}
-	}
-
-	this->slvr.sync_res_chunks();
-
-	for (auto c : this->plan_chunk_set) {
-		auto& chunk = this->chunks[c];
-		idx_t train = chunk.prepr->train;
-
-		for (auto other : this->slvr.res_chunks[chunk.prepr->res]) {
-			bool before = other->time.end <= chunk.lb.start;
-			bool after = other->time.start >= chunk.ub.end;
-
-			if (before || after) {
-				continue;
-			}
-
-			GRBVar var = this->model.addVar(0, GRB_INFINITY, 1, GRB_CONTINUOUS,
-				format("overlap_{}_{}", c, other->prepr->idx));
-		
-			GRBTempConstr cons;
-
-			if ((other->time.start + other->time.end) < (chunk.lb.start + chunk.ub.end)) {
-				cons = (other->time.end - chunk.var.start <= var);
-			}
-			else {
-				cons = (chunk.var.end - other->time.start <= var);
-			}
-
-			this->plan_vars.push_back(var);
-			this->plan_constrs.push_back(this->model.addConstr(cons,
-				format("overlap_{}_{}", c, other->prepr->idx)));
-		}
-	}
 }
 
 
@@ -261,8 +47,7 @@ void Route_planner::init_data()
 {
 	this->init_ops();
 	this->init_routes();
-	this->init_levels();
-	this->init_chunks();
+	this->init_model();
 }
 
 
@@ -290,28 +75,6 @@ void Route_planner::init_routes()
 	
 	for (auto& route : this->prepr.routes) {
 		this->routes[route.idx].prepr = &route;
-	}
-}
-
-
-void Route_planner::init_levels()
-{
-	size_t n_levels = this->prepr.n_levels();
-	this->levels.resize(n_levels);
-
-	for (auto& level : this->prepr.levels) {
-		this->levels[level.idx].prepr = &level;
-	}
-}
-
-
-void Route_planner::init_chunks()
-{
-	size_t n_chunks = this->prepr.n_chunks();
-	this->chunks.resize(n_chunks);
-
-	for (auto& chunk : this->prepr.chunks) {
-		this->chunks[chunk.idx].prepr = &chunk;
 	}
 }
 
@@ -564,8 +327,7 @@ void Route_planner::sync_route_ops()
 			this->need_op_graph_sync = true;
 
 			for (auto c : op.prepr->chunks) {
-				this->slvr.chunk_state_dirty += c;
-				this->slvr.need_chunk_state_sync = true;
+				this->slvr.chunk_mngr->state_change(c);
 			}
 		}
 	}
@@ -592,7 +354,7 @@ void Route_planner::sync_op_graph()
 		Edge new_edge = op.to_edge();
 		if (op.curr_edge != new_edge) {
 			this->slvr.event_graph.update_edge(op.curr_edge, new_edge);
-			this->slvr.need_level_time_sync = true;
+			this->slvr.graph_time_change();
 
 			op.curr_edge = new_edge;
 		}
@@ -603,7 +365,7 @@ void Route_planner::sync_op_graph()
 				op.prepr->level.start, op.prepr->inst->start_lb);
 			
 			if (lb_diff) {
-				this->slvr.need_level_time_sync = true;
+				this->slvr.graph_time_change();
 			}
 		}
 	}

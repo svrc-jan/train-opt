@@ -53,7 +53,9 @@ public:
 
 	/* return false if cycle */
 	bool sync_cycle();
-	void sync_time(Flag& time_change);
+
+	/* return true if changes */
+	bool sync_time(Flag& time_change);
 
 	void get_cycle_path(std::vector<Vertex_edge>& ret, vtx_t start);
 	void get_critical_path(std::vector<Vertex_edge>& ret, vtx_t end);
@@ -87,7 +89,7 @@ private:
 	bool update_cycle_rec(vtx_t v);
 	void update_cycle_paths();
 	void update_time_stack(vtx_t v);
-	void update_time_clear(vtx_t v, Flag& time_change);
+	bool update_time_clear(vtx_t v, Flag& time_change);
 
 
 	Edge_entry* find_entry(std::vector<Edge_entry>& list, const Edge_entry& entry);

@@ -1,9 +1,7 @@
 #pragma once
 
-#include "instance.hpp"
-#include "preprocess.hpp"
+
 #include "solver.hpp"
-#include "event_graph.hpp"
 
 
 class Solver;

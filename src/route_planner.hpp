@@ -36,11 +36,17 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
+	Flag is_op_active;
+	Flag is_route_active;
+
 	Route_planner(Solver& sovler);
 	~Route_planner();
 
+	void init_data();
+	void sync_route_ops();
+	void sync_op_graph();
+	void make_init_routes();
 
-	friend class Solver;
 
 private:
 	Solver& slvr;
@@ -51,13 +57,8 @@ private:
 
 	std::vector<Op> ops = {};
 	std::vector<Route> routes = {};
-	std::vector<Level> levels = {};
-	std::vector<Chunk> chunks = {};
 
 	std::vector<GRBConstr> flow_constr = {};
-
-	Flag is_op_active;
-	Flag is_route_active;
 
 	uint8_t need_route_op_sync = false;
 	uint8_t need_op_graph_sync = false;
@@ -65,23 +66,13 @@ private:
 	Flag op_graph_dirty;
 	Flag route_op_dirty;
 
-	std::vector<GRBVar> plan_vars = {};
-	std::vector<GRBConstr> plan_constrs = {};
-
-	std::set<idx_t> plan_chunk_set = {};
 	std::set<idx_t> assign_random_route_set = {};
 
 	void plan_section_range(const Interval<idx_t>& section_ivl);
-	
-	void make_levels(const Interval<idx_t>& level_ivl);
-	void make_level_bounds(const Interval<idx_t>& level_ivl);
-	void propagate_level_lbs(const Interval<idx_t>& level_ivl);
-	void propagate_level_ubs(const Interval<idx_t>& level_ivl);
 
 	void make_plan_routes(const Interval<idx_t>& section_ivl);
 	void make_plan_chunks();
 
-	void init_data();
 	void init_ops();
 	void init_routes();
 	void init_levels();
@@ -105,10 +96,8 @@ private:
 
 	void assign_all_sections_dur(double stretch=1.0);
 	void assign_section_dur(const Preprocess::Section& sect, double stretch=0.0);
-	void assign_op_dur(Op& op, dur_t new_dur);
 
-	void sync_route_ops();
-	void sync_op_graph();
+	void assign_op_dur(Op& op, dur_t new_dur);
 };
 
 
