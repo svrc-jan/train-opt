@@ -11,6 +11,8 @@
 #include "route_planner.hpp"
 
 
+#define GBR_EXCEPTION 20
+
 enum Solver_state
 {
 	SLVR_DONE,
@@ -85,6 +87,7 @@ private:
 	std::vector<idx_t> need_list = {};
 
 	void init_data();
+	void init_levels();
 	void init_chunks();
 	void init_res_chunks();
 
@@ -94,11 +97,14 @@ private:
 	void sync_res_chunks();
 	
 	void update_level_chunks(idx_t c, idx_t l_old, idx_t l_new);
+
+	inline Event_graph::tim_t time(vtx_t v) const { return this->event_graph.time[v]; } 
 };
 
 
 struct Solver::Chunk
 {
+	idx_t idx = IDX_MAX;
 	Chunk_state state;
 	Interval<tim_t> time = {0, TIM_MAX};
 	const Preprocess::Chunk* prepr = nullptr;
@@ -116,5 +122,4 @@ struct Solver::Chunk
 
 	static bool ptr_cmp(const Chunk* const a, const Chunk* const b) { return a->time < b->time; }
 };
-
 

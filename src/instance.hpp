@@ -16,7 +16,7 @@
 class Instance
 {
 public:
-	struct Res;
+	struct Idx_dur;
 	struct Op;
 	struct Train;
 	struct Obj;
@@ -62,7 +62,7 @@ public:
 private:
 	void* data_ptr = nullptr;
 
-	Array<Res> op_res;
+	Array<Idx_dur> op_res;
 	Array<uint16_t> op_succ;
 	Array<uint16_t> op_pred;
 
@@ -85,13 +85,13 @@ private:
 };
 
 
-struct Instance::Res
+struct Instance::Idx_dur
 {
 	idx_t idx = IDX_MAX;
 	dur_t rel_time = 0;
 
-	bool operator<(const Res& other) const { return this->idx < other.idx; }
-	bool operator==(const Res& other) const { return this->idx == other.idx; }
+	bool operator<(const Idx_dur& other) const { return this->idx < other.idx; }
+	bool operator==(const Idx_dur& other) const { return this->idx == other.idx; }
 
 	bool operator<(idx_t other) const { return this->idx < other; }
 	bool operator==(idx_t other) const { return this->idx == other; }
@@ -123,7 +123,7 @@ struct Instance::Op
 
 	Array<idx_t> succ;
 	Array<idx_t> pred;
-	Array<Res> res;
+	Array<Idx_dur> res;
 
 	OPERATOR_IDX(idx_t)
 

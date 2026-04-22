@@ -29,6 +29,7 @@ void Event_graph::set_n_vtx(const size_t n_vtx)
 	this->time_dirty.set_n_items(n_vtx);
 
 	this->cycle_pred.resize(n_vtx);
+	this->time.resize(n_vtx);
 	this->time_lb.resize(n_vtx, 0);
 	this->time_pred.resize(n_vtx);
 	
@@ -53,9 +54,16 @@ bool Event_graph::set_time_lb(vtx_t v, tim_t lb)
 void Event_graph::add_edge(const Edge& x)
 {
 	assert(x.is_valid());
+	assert(x.v.start != x.v.end);
 
-	this->edges_in[x.v.end].push_back(x.to_in());
-	this->edges_out[x.v.start].push_back(x.to_out());
+	auto in_entry = x.to_in();
+	auto out_entry = x.to_out();
+
+	assert(x.v.end != in_entry.v);
+	assert(x.v.start != out_entry.v);
+
+	this->edges_in[x.v.end].push_back(in_entry);
+	this->edges_out[x.v.start].push_back(out_entry);
 
 	this->cycle_dirty += x.v.end;
 	this->time_dirty += x.v.end;

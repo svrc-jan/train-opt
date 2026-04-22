@@ -40,6 +40,7 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 	cout << "  routes:  " << this->n_routes() << endl;
 	
 	this->make_sections();
+	this->make_section_min_dur();
 	cout << "  sects:   " << this->n_sects() << endl;
 
 	this->make_resource_chunks();
@@ -523,6 +524,10 @@ void Preprocess::make_sections()
 				}
 			}
 		}
+
+		if (level.is_sect) {
+			assert(level.n_juncts() == 1);
+		}
 	}
 
 	Flag is_route_added(this->n_routes());
@@ -558,7 +563,7 @@ void Preprocess::make_sections()
 				sect.level.end++;
 			}
 
-			sect.routes.clear();
+			size_t n_routes = 0;
 			for (idx_t l = sect.level.start; l < sect.level.end; l++) {
 				auto& level = this->levels[l];
 				for (auto& succ : level.succ) {
@@ -566,13 +571,15 @@ void Preprocess::make_sections()
 					assert(route < this->n_routes());
 					if (!is_route_added[route]) {
 						is_route_added += route;
-						sect.routes.increment_size(1);
 						this->sect_routes.push_back(route);
+						n_routes++;
 					}
 				}
 			}
 
-			assert(sect.routes.size() >= 1);
+			assert(n_routes > 0);
+			sect.routes.set_size(n_routes);
+			sect.is_single_route = (n_routes == 1);
 
 			train.sects.increment_size(1);
 			this->sects.push_back(sect);
@@ -595,6 +602,61 @@ void Preprocess::make_sections()
 	}
 
 	this->sects.shrink_to_fit();
+}
+
+
+void Preprocess::make_section_min_dur()
+{
+	tim_t dist[this->n_ops()];
+	for (auto o : this->ops_range()) {
+		dist[o] = TIM_MAX;
+	}
+
+	for (auto& sect : this->sects) {
+		sect.min_dur = 0;
+		if (sect.is_single_route) {
+			for (auto o : this->routes[sect.routes[0]].ops) {
+				sect.min_dur += this->inst.ops[o];
+			}
+			continue;
+		}
+
+		auto& pq = this->prio_queue;
+		while (!pq.empty()) { pq.pop(); }
+
+		auto& level_start = this->levels[sect.level.start];
+		idx_t l_end = sect.level.end;
+
+		for (auto succ : level_start.succ) {
+			dist[succ.op] = 0;
+			pq.push({0, succ.op});
+		}
+
+		bool found = false;
+		while (!pq.empty()) {
+			auto curr = pq.top(); pq.pop();
+
+			if (dist[curr.second] < curr.first) {
+				continue;
+			}
+
+			auto& op = this->ops[curr.second];
+			if (op.level.start == l_end) {
+				sect.min_dur = dist[op.idx];
+				found = true;
+				break;
+			}
+
+			tim_t succ_dist = dist[op.idx] + op.inst->dur;
+			for (auto s : op.inst->succ) {
+				if (dist[s] > succ_dist) {
+					pq.push({succ_dist, s});
+					dist[s] = succ_dist;
+				}
+			}
+		}
+		assert(found);
+	}
 }
 
 

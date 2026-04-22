@@ -120,8 +120,8 @@ struct Event_graph::Edge
 	inline bool operator!=(const Edge& x) const
 	{ return !(*this == x); }
 
-	inline Edge_entry to_in() const { return {v.end, d, e}; }
-	inline Edge_entry to_out() const { return {v.start, d, e}; }
+	inline Edge_entry to_in() const { return {v.start, d, e}; }
+	inline Edge_entry to_out() const { return {v.end, d, e}; }
 	inline bool is_valid() const { return (v.start < VTX_MAX) && (v.end < VTX_MAX); }
 };
 

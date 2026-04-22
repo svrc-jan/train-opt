@@ -28,9 +28,11 @@ struct Range<T>::Iter
 	inline void operator++() { *this += 1; }
 	inline void operator--() { *this -= 1; }
 
-	inline auto operator<=>(const Iter& other) const { return state <=> other.state; }
-	inline bool operator!=(const Iter& other) const { return state != other.state; }
+	inline bool operator==(const Iter& other) const { return state == other.state; }
+	inline bool operator!=(const Iter& other) const { return state < other.state; }
+	inline bool operator<(const Iter& other) const { return state < other.state; }
 
-	inline auto operator<=>(const T& other) const { return state <=> other; }
-	inline bool operator!=(const T& other) const { return state != other; }
+	inline auto operator==(const T& other) const { return state == other; }
+	inline bool operator!=(const T& other) const { return state < other; }
+	inline bool operator<(const T& other) const { return state < other; }
 };

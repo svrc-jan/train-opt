@@ -109,7 +109,7 @@ void Instance::parse(const json& inst_jsn)
 	this->op_res.clear();
 	this->op_succ.clear();
 
-	vector<Res> res_vec;
+	vector<Idx_dur> res_vec;
 
 	for (const json& train_jsn : inst_jsn["trains"]) {
 		Train train;
@@ -121,7 +121,12 @@ void Instance::parse(const json& inst_jsn)
 			
 			op.idx = this->n_ops();
 			op.train = this->n_trains();
-			op.dur = op_jsn["min_duration"];
+
+			size_t dur = op_jsn["min_duration"];
+			assert(dur < DUR_MAX);
+			
+			op.dur = dur;
+
 			
 			json_update(op.start_lb, "start_lb", op_jsn);
 			json_update(op.start_ub, "start_ub", op_jsn);

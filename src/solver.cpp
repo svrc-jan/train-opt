@@ -13,8 +13,9 @@ Solver::Solver(const Preprocess& prepr, GRBEnv& grb_env)
 	this->route_plnr = unique_ptr<Route_planner>(new Route_planner(*this));
 	this->conf_rslvr = unique_ptr<Conflict_resolver>(new Conflict_resolver(*this));
 
-	this->event_graph.set_n_vtx(prepr.n_levels());
 	this->init_data();
+
+	this->route_plnr->init_model();
 }
 
 
@@ -27,13 +28,21 @@ Solver::~Solver()
 void Solver::solve()
 {
 	this->route_plnr->assign_all_random_sections();
+	this->route_plnr->assign_all_sections_dur(1.5);
 	this->sync_res_chunks();
+
+	this->route_plnr->freeze_all();
+	bool feasible = this->route_plnr->optimize_model();
+	assert(feasible);
+
+	idx_t n_routes = this->prepr.trains[0].sects.size()/2;
+	this->route_plnr->plan_section_range({0, n_routes});
 }
 
 
 void Solver::init_data()
 {
-	this->level_time_dirty.set_n_items(this->prepr.n_levels());
+	this->init_levels();
 	this->init_chunks();
 
 	this->route_plnr->init_data();
@@ -41,12 +50,24 @@ void Solver::init_data()
 }
 
 
+void Solver::init_levels()
+{
+	size_t n_levels = this->prepr.n_levels();
+
+	this->event_graph.set_n_vtx(n_levels);
+	this->level_time_dirty.set_n_items(n_levels);
+	this->level_chunks.resize(n_levels);
+}
+
+
 void Solver::init_chunks()
 {
-	this->chunk_time_dirty.set_n_items(this->prepr.n_chunks());
-	this->chunk_state_dirty.set_n_items(this->prepr.n_chunks());
+	size_t n_chunks = this->prepr.n_chunks();
 
-	this->chunks.resize(this->prepr.n_chunks());
+	this->chunk_time_dirty.set_n_items(n_chunks);
+	this->chunk_state_dirty.set_n_items(n_chunks);
+
+	this->chunks.resize(n_chunks);
 	for (auto& chunk : this->prepr.chunks) {
 		this->chunks[chunk.idx].prepr = &chunk;
 	}
@@ -63,15 +84,12 @@ void Solver::init_res_chunks()
 
 	auto res_range = this->inst.res_range();
 
-	size_t chunk_cnt[this->inst.n_res];
-
 	for (auto r : res_range) {
 		this->res_chunks[r].set_size(0);
-		chunk_cnt[r] = 0;
 	}
 
 	for (auto& chunk : this->prepr.chunks) {
-		chunk_cnt[chunk.res] += 1;
+		this->res_chunks[chunk.res].increment_size(1);
 	}
 
 	size_t res_chunk_idx = 0;
@@ -88,11 +106,11 @@ void Solver::init_res_chunks()
 
 void Solver::sync_level_times()
 {
+	this->route_plnr->sync_op_graph();
+
 	if (!this->need_level_time_sync) {
 		return;
 	}
-
-	this->route_plnr->sync_op_graph();
 
 	this->level_time_dirty.clear();
 	this->event_graph.sync_time(this->level_time_dirty);
@@ -111,11 +129,12 @@ void Solver::sync_level_times()
 
 void Solver::sync_chunk_state()
 {
+	this->route_plnr->sync_route_ops();
+
 	if (!this->need_chunk_state_sync) {
 		return;
 	}
 
-	this->route_plnr->sync_route_ops();
 	this->chunk_state_dirty.get_true_list(this->need_list);
 
 	for (auto c : this->need_list) {
@@ -171,12 +190,13 @@ void Solver::update_level_chunks(idx_t c, idx_t l_old, idx_t l_new)
 
 void Solver::sync_chunk_times()
 {
+	this->sync_chunk_state();
+	this->sync_level_times();
+
 	if (!this->need_chunk_time_sync) {
 		return;
 	}
 
-	this->sync_chunk_state();
-	this->sync_level_times();
 
 	this->chunk_time_dirty.get_true_list(this->need_list);
 	for (auto c : this->need_list) {
@@ -185,8 +205,8 @@ void Solver::sync_chunk_times()
 		Interval<tim_t> new_time;
 
 		if (chunk.is_active()) {
-			new_time.start = this->event_graph.time[chunk.state.level.start];
-			new_time.end = this->event_graph.time[chunk.state.level.end] +
+			new_time.start = this->time(chunk.state.level.start);
+			new_time.end = this->time(chunk.state.level.end) +
 				chunk.state.rel_time;
 		}
 		else {
@@ -208,11 +228,13 @@ void Solver::sync_chunk_times()
 
 void Solver::sync_res_chunks()
 {
+	this->sync_chunk_times();
+
 	if (!this->need_res_chunks_sync) {
 		return;
 	}
 
-	this->sync_chunk_times();
+	
 
 	this->res_chunks_dirty.get_true_list(this->need_list);
 	for (auto r : this->need_list) {

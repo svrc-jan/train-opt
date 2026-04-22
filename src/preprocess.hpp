@@ -87,11 +87,16 @@ private:
 
 	Flag is_op_req;
 
-	std::vector<Instance::Res> chunk_ops = {};
+	std::vector<Instance::Idx_dur> chunk_ops = {};
 	std::vector<idx_t> op_chunks = {};
 
 	std::set<idx_t> set_;
 	std::queue<idx_t> queue_;
+	std::priority_queue<
+		std::pair<tim_t, idx_t>,
+		std::vector<std::pair<tim_t, idx_t>>,
+		std::greater<std::pair<tim_t, idx_t>>
+	> prio_queue;
 
 	void make_junctions();
 	void make_levels();
@@ -105,6 +110,7 @@ private:
 	void make_routes();
 	void make_route_junct_level();
 	void make_sections();
+	void make_section_min_dur();
 
 	void make_resource_chunks();
 	void assign_op_chunks();
@@ -190,6 +196,8 @@ struct Preprocess::Section
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
+	tim_t min_dur = TIM_MAX;
+	uint8_t is_single_route = false;
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
 	Array<idx_t> routes;
 };
@@ -211,7 +219,7 @@ struct Preprocess::Chunk
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
 	Chunk_state state;
-	Array<Instance::Res> ops;
+	Array<Instance::Idx_dur> ops;
 };
 
 

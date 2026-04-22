@@ -13,6 +13,10 @@ class Route_planner
 public:
 	struct Op;
 	struct Route;
+	struct Level;
+	struct Chunk;
+
+	struct Flow_cons;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -42,27 +46,66 @@ private:
 	Solver& slvr;
 	GRBModel model;
 
+	double init_dur_stretch = 0.5;
+	double res_dur_stretch = 0.3;
+
 	std::vector<Op> ops = {};
 	std::vector<Route> routes = {};
+	std::vector<Level> levels = {};
+	std::vector<Chunk> chunks = {};
+
+	std::vector<GRBConstr> flow_constr = {};
+
+	Flag is_op_active;
+	Flag is_route_active;
 
 	uint8_t need_route_op_sync = false;
 	uint8_t need_op_graph_sync = false;
 
-	Flag is_op_active;
 	Flag op_graph_dirty;
 	Flag route_op_dirty;
 
-	std::set<idx_t> route_set = {};
+	std::vector<GRBVar> plan_vars = {};
+	std::vector<GRBConstr> plan_constrs = {};
+
+	std::set<idx_t> plan_chunk_set = {};
+	std::set<idx_t> assign_random_route_set = {};
+
+	void plan_section_range(const Interval<idx_t>& section_ivl);
+	
+	void make_levels(const Interval<idx_t>& level_ivl);
+	void make_level_bounds(const Interval<idx_t>& level_ivl);
+	void propagate_level_lbs(const Interval<idx_t>& level_ivl);
+	void propagate_level_ubs(const Interval<idx_t>& level_ivl);
+
+	void make_plan_routes(const Interval<idx_t>& section_ivl);
+	void make_plan_chunks();
 
 	void init_data();
+	void init_ops();
+	void init_routes();
+	void init_levels();
+	void init_chunks();
 
-	void update_route(Route& route, bool value);
-	inline void update_route(idx_t r, bool value)
-	{ this->update_route(this->routes[r], value); };
+	void init_model();
+	void find_req_routes();
+	void add_route_vars();
+	void add_flow_constr();
+
+	bool optimize_model();
+
+	void freeze_all();
+	void unfreeze_all();
+
+	void freeze_section(const Preprocess::Section& sect);
+	void unfreeze_section(const Preprocess::Section& sect);
 
 	void assign_all_random_sections();
 	void assign_random_section(const Preprocess::Section& sect);
 
+	void assign_all_sections_dur(double stretch=1.0);
+	void assign_section_dur(const Preprocess::Section& sect, double stretch=0.0);
+	void assign_op_dur(Op& op, dur_t new_dur);
 
 	void sync_route_ops();
 	void sync_op_graph();
@@ -84,6 +127,33 @@ struct Route_planner::Route
 {
 	uint8_t value = 0;
 	uint8_t active = 0;
+	uint8_t is_req = 0;
+	uint8_t is_frozen = 0;
 	GRBVar var;
 	const Preprocess::Route* prepr = nullptr;
+
+	GRBLinExpr to_expr() const { return (is_req ? 1 : GRBLinExpr(var)); }
+	void freeze();
+	void unfreeze();
+};
+
+
+struct Route_planner::Level
+{
+	uint8_t is_fixed = false;
+	uint8_t in_model = false;
+	tim_t lb = 0;
+	tim_t ub = TIM_MAX;
+	GRBVar var;
+	const Preprocess::Level* prepr = nullptr;
+	GRBLinExpr to_expr() const { return (is_fixed ? lb : GRBLinExpr(var)); }
+};
+
+
+struct Route_planner::Chunk
+{
+	Interval<tim_t> ub = {0, 0};
+	Interval<tim_t> lb = {TIM_MAX, TIM_MAX};
+	Interval<GRBVar> var;
+	const Preprocess::Chunk* prepr = nullptr;
 };

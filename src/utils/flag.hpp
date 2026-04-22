@@ -78,7 +78,7 @@ void Flag::get_true_list(T& ret) const
 	ret.clear();
 	if constexpr (check_count) {
 		size_t true_count = this->get_true_count();
-		if (true_count) {
+		if (true_count == 0) {
 			return;
 		}
 	}
