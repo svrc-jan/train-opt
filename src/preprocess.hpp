@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <map>
 #include <queue>
 
 #include "utils/flag.hpp"
@@ -12,17 +13,19 @@ class Preprocess
 {
 public:
 	struct Op;
-	struct Route;
 	struct Junction;
 	struct Level;
+	struct Route;
 	struct Section;
 	struct Chunk;
+	struct Chunk_link;
 	struct Obj;
 	struct Train;
 
 	struct Junct_edge;
 	struct Level_edge;
 	struct Chunk_state;
+	struct Link_pair;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -90,6 +93,8 @@ private:
 	std::vector<Instance::Idx_dur> chunk_ops = {};
 	std::vector<idx_t> op_chunks = {};
 
+	std::vector<idx_t> chunk_fix_links = {};
+
 	std::set<idx_t> set_;
 	std::queue<idx_t> queue_;
 	std::priority_queue<
@@ -115,6 +120,8 @@ private:
 	void make_resource_chunks();
 	void assign_op_chunks();
 
+	void make_chunk_links();
+
 	void make_objs();
 
 	void make_junction_bounds();
@@ -125,8 +132,16 @@ private:
 	bool merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, std::set<idx_t>& op_set);
 	bool is_op_reachable(const std::set<idx_t>& set_from, idx_t target);
 	
-	template<bool FWD>
+	template<bool forward=true>
 	bool is_op_reachable_temp(const std::set<idx_t>& set_from, idx_t target);
+
+	template<bool forward=true>
+	void make_link_map(std::map<std::pair<idx_t, idx_t>, std::set<idx_t>>& link_map, const Chunk& chunk);
+	
+	template<bool forward=true>
+	void add_fixed_link(std::vector<std::set<idx_t>>& fix_links, std::map<idx_t, idx_t>& x_count,
+		std::map<std::pair<idx_t, idx_t>, std::set<idx_t>>& link_map, const Chunk& chunk);
+
 };
 
 
@@ -219,7 +234,23 @@ struct Preprocess::Chunk
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
 	Chunk_state state;
+	uint8_t is_fixed = 0;
 	Array<Instance::Idx_dur> ops;
+	Array<idx_t> fix_links;
+};
+
+
+struct Preprocess::Link_pair
+{
+	idx_t from = IDX_MAX;
+	idx_t to = IDX_MAX;
+};
+
+
+struct Preprocess::Chunk_link
+{
+	Link_pair route;
+	Link_pair chunk;
 };
 
 
@@ -300,7 +331,7 @@ struct Preprocess::Level_edge
 struct Preprocess::Op_chunk_chain
 {
 	idx_t op = IDX_MAX;
-	dur_t res_time = 0;
+	dur_t rel_time = 0;
 	cnt_t prev = CNT_MAX;
 	cnt_t next = CNT_MAX;
 	cnt_t has_unlock = false;
@@ -315,3 +346,4 @@ size_t Preprocess::n_opt_levels() const
 	}
 	return count;
 }
+

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <iostream>
 #include <set>
+#include <tuple>
 
 #include "utils/disjoint_set.hpp"
 #include "utils/stl_print.hpp"
@@ -44,6 +45,8 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 	cout << "  sects:   " << this->n_sects() << endl;
 
 	this->make_resource_chunks();
+	this->assign_op_chunks();
+	
 	cout << "  chunks:  " << this->n_chunks() << endl;
 
 	if (this->chunk_direct_merges > 0) {
@@ -54,7 +57,8 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
 	}
 
-	this->assign_op_chunks();
+	this->make_chunk_links();
+	cout << "  links:   " << this->chunk_fix_links.size() << endl;
 
 	this->make_objs();
 }
@@ -703,18 +707,22 @@ void Preprocess::make_resource_chunks()
 	this->chunk_direct_merges = 0;
 	this->chunk_parallel_merges = 0;
 
-	set<idx_t> op_set;
-
+	set<idx_t> op_set = {};
+	set<idx_t> conn_op_set;
+	
 	for (auto& train : this->trains) {	
 		for (auto r : res_range) {
 			res_ops[r].clear();
 		}
 
+		
+
 		for (auto& op : train.inst->ops) {
+
 			for (auto& res : op.res) {
 				res_ops[res.idx].push_back({
 					.op = op.idx,
-					.res_time = DUR_MAX,
+					.rel_time = res.rel_time,
 					.prev = CNT_MAX,
 					.next = CNT_MAX,
 				});
@@ -725,9 +733,13 @@ void Preprocess::make_resource_chunks()
 			auto& ro = res_ops[r];
 			size_t n = res_ops[r].size();
 
+			op_set.clear();
+
 			for (size_t i = 0; i < n; i++) {
-				if (!this->merge_res_op(ro, i, r, true, op_set)) {
-					this->merge_res_op(ro, i, r, false, op_set);
+				op_set.insert(ro[i].op);
+
+				if (!this->merge_res_op(ro, i, r, true, conn_op_set)) {
+					this->merge_res_op(ro, i, r, false, conn_op_set);
 				}
 			}
 			
@@ -744,15 +756,19 @@ void Preprocess::make_resource_chunks()
 						.level = {IDX_MAX, IDX_MAX},
 						.rel_time = 0
 					},
-					.ops = {nullptr, nullptr}
+					.ops = {nullptr, nullptr},
+					.fix_links = {nullptr, nullptr}
 				};
 
 				chunk.ops.clear();
 
 				cnt_t j = i;
 				while (j < CNT_MAX) {
+					auto ret = op_set.erase(ro[j].op);
+					assert(ret == 1);
+
 					chunk.ops.increment_size(1);
-					this->chunk_ops.push_back({ro[j].op, ro[j].res_time});
+					this->chunk_ops.push_back({ro[j].op, ro[j].rel_time});
 
 					j = ro[j].next;
 				}
@@ -782,7 +798,7 @@ void Preprocess::make_resource_chunks()
 	}
 }
 
-bool Preprocess::merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, set<idx_t>& op_set)
+bool Preprocess::merge_res_op(vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, set<idx_t>& op_set)
 {
 	auto& op = this->inst.ops[ro[i].op];
 
@@ -805,7 +821,7 @@ bool Preprocess::merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r,
 				}
 			}
 
-			if (match_time && (ro[i].res_time != ro[j].res_time) 
+			if (match_time && (ro[i].rel_time != ro[j].rel_time) 
 				&& this->inst.is_op_unlock(ro[k].op, r)) {
 				
 				time_valid = false;
@@ -848,13 +864,13 @@ bool Preprocess::merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r,
 }
 
 
-bool Preprocess::is_op_reachable(const std::set<idx_t>& set_from, idx_t target)
+bool Preprocess::is_op_reachable(const set<idx_t>& set_from, idx_t target)
 {
 	return this->is_op_reachable_temp<true>(set_from, target) ||
 		this->is_op_reachable_temp<false>(set_from, target);
 }
 
-template<bool FWD=true>
+template<bool forward>
 bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
 {
 	auto& op_target = this->ops[target];
@@ -863,7 +879,7 @@ bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
 	while(!this->queue_.empty()) { this->queue_.pop(); };
 
 	idx_t l_limit;
-	if constexpr (FWD) {
+	if constexpr (forward) {
 		l_limit = op_target.level.end;
 	}
 	else {
@@ -886,7 +902,7 @@ bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
 		idx_t o = this->queue_.front(); this->queue_.pop();
 		
 
-		if constexpr (FWD) {
+		if constexpr (forward) {
 			idx_t l = this->ops[o].level.start;
 			if (l >= l_limit) {
 				continue;
@@ -900,7 +916,7 @@ bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
 		}
 		
 		Array<idx_t> neig;
-		if constexpr (FWD) {
+		if constexpr (forward) {
 			neig = this->inst.ops[o].succ;
 		}
 		else {
@@ -950,6 +966,162 @@ void Preprocess::assign_op_chunks()
 		}
 	}
 }
+
+
+void Preprocess::make_chunk_links()
+{
+	size_t n_chunks = this->n_chunks();
+
+	map<pair<idx_t, idx_t>, set<idx_t>> link_map;
+	map<idx_t, idx_t> x_count;
+
+	vector<set<idx_t>> fix_links(n_chunks);
+
+	for (auto& chunk : this->chunks) {
+		// pred_routes.clear();
+
+		this->make_link_map<true>(link_map, chunk);
+		this->add_fixed_link<true>(fix_links, x_count, link_map, chunk);
+
+		// this->make_link_map<false>(link_map, chunk);
+		// this->add_fixed_link<false>(fix_links, x_count, link_map, chunk);
+	}
+
+	// for (auto c : chunks_range) {
+	// 	if (!fix_links[c].empty()) {
+	// 		cout << c  << " fixed: " << fix_links[c] << endl;
+	// 	}
+	// }
+
+
+	size_t fix_links_idx = 0;
+
+	for (auto& chunk : this->chunks) {
+		size_t size = fix_links[chunk.idx].size();
+		chunk.fix_links.set_size(size);
+		fix_links_idx += size;
+	}
+
+	this->chunk_fix_links.resize(fix_links_idx);
+
+	fix_links_idx = 0;
+	for (auto& chunk : this->chunks) {
+		chunk.fix_links.assign_offset(this->chunk_fix_links, fix_links_idx, true);
+		
+		for (auto x : fix_links[chunk.idx]) {
+			chunk.fix_links.push_back(x);
+		}
+
+		for (auto x : chunk.fix_links) {
+			bool op_connect = true;
+			bool pred_connect = true;
+
+			for (auto o : chunk.ops) {
+				auto& op = this->ops[o.idx];
+			}
+
+			for (auto o : chunk.ops) {
+				auto& op = this->ops[o.idx];
+
+				bool op_connect = (op.chunks.find(x) != nullptr);
+				
+				bool succ_connect = true;
+				for (auto s : op.inst->succ) {
+					auto& succ = this->ops[s];
+					if (succ.chunks.find(x) == nullptr) {
+						succ_connect = false;
+						break;
+					}
+				}
+
+				for (auto s : op.inst->succ) {
+					auto& succ = this->ops[s];
+					if (succ.chunks.find(x) == nullptr) {
+						succ_connect = false;
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+
+template<bool forward>
+void Preprocess::make_link_map(map<pair<idx_t, idx_t>, set<idx_t>>& link_map, const Chunk& chunk)
+{
+	link_map.clear();
+
+	for (auto& o : chunk.ops) {
+		auto& op = this->ops[o.idx];
+
+		Array<idx_t> neig_list;
+		if constexpr(forward) {
+			neig_list = op.inst->succ;
+		}
+		else {
+			neig_list = op.inst->pred;
+		}
+
+		for (auto n : neig_list) {
+			auto& neig = this->ops[n];
+
+			for (auto x : op.chunks) {
+				if (x == chunk.idx) {
+					continue;
+				}
+
+				if constexpr (forward) {
+					link_map[{op.route, neig.route}].insert(x);
+				}
+				else {
+					link_map[{neig.route, op.route}].insert(x);
+				}
+			}
+
+			for (auto x : neig.chunks) {
+				if (x == chunk.idx) {
+					continue;
+				}
+
+				if constexpr (forward) {
+					link_map[{op.route, neig.route}].insert(x);
+				}
+				else {
+					link_map[{neig.route, op.route}].insert(x);
+				}
+			}
+		}
+	}
+}
+
+
+template<bool forward>
+void Preprocess::add_fixed_link(vector<set<idx_t>>& fix_links, map<idx_t, idx_t>& x_count,
+	map<pair<idx_t, idx_t>, set<idx_t>>& link_map, const Chunk& chunk)
+{
+	x_count.clear();
+
+	for (auto it = link_map.begin(); it != link_map.end(); it++) {
+		for (auto x : it->second) {
+			x_count[x] += 1;
+		}
+	}
+
+	for (auto it = x_count.begin(); it != x_count.end(); it++) {
+		if (it->second == link_map.size()) {
+			if constexpr (forward) {
+				fix_links[chunk.idx].insert(it->first);
+			}
+			else {
+				fix_links[it->first].insert(chunk.idx);
+			}
+		}
+	}
+}
+
+
+
 
 
 void Preprocess::make_objs()

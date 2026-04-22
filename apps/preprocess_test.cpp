@@ -36,7 +36,7 @@ int main(int argc, char const *argv[])
 		// }
 	}
 
-	cout << "chunk size: " << sizeof(Preprocess::Chunk) << endl;
+	// cout << "chunk size: " << sizeof(Preprocess::Chunk) << endl;
 
 	return 0;
 }

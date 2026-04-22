@@ -250,7 +250,8 @@ void Route_planner::make_plan_chunks()
 			}
 
 			this->plan_vars.push_back(var);
-			this->plan_constrs.push_back(this->model.addConstr(cons));
+			this->plan_constrs.push_back(this->model.addConstr(cons,
+				format("overlap_{}_{}", c, other->prepr->idx)));
 		}
 	}
 }
@@ -258,15 +259,10 @@ void Route_planner::make_plan_chunks()
 
 void Route_planner::init_data()
 {
-	size_t n_routes = this->prepr.n_routes();
-
-	this->is_route_active.set_n_items(n_routes);
-	this->route_op_dirty.set_n_items(n_routes);
-	this->routes.resize(n_routes);
-	
-	for (auto& route : this->prepr.routes) {
-		this->routes[route.idx].prepr = &route;
-	}
+	this->init_ops();
+	this->init_routes();
+	this->init_levels();
+	this->init_chunks();
 }
 
 
