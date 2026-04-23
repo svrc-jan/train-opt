@@ -31,9 +31,9 @@ int main(int argc, char const *argv[])
 		Instance inst(argv[1]);
 		Preprocess prepr(inst, true);
 
-		// for (auto& level : prepr.levels) {
-		// 	cout << level.train << "." << level.idx << " - req: " << level.res_req << ", opt: " << level.res_req << endl;
-		// }
+		for (auto& op : prepr.ops) {
+			cout << op.idx << " chunks: " << op.chunks << endl;
+		}
 	}
 
 	// cout << "chunk size: " << sizeof(Preprocess::Chunk) << endl;

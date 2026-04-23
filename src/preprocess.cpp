@@ -965,3 +965,29 @@ void Preprocess::assign_op_chunks()
 		}
 	}
 }
+
+
+void Preprocess::make_objs()
+{
+	this->objs.reserve(this->inst.objs.size());
+
+
+	for (auto& obj_i : this->inst.objs) {
+		auto op = this->ops[obj_i.op];
+
+		bool is_bin = obj_i.increment > 0;
+		assert(!is_bin || (obj_i.coeff == 0));
+
+		Obj obj = {
+			.idx = (idx_t)this->objs.size(),
+			.train = op.train,
+			.level = op.level.start,
+			.route = op.route,
+			.is_bin = is_bin,
+			.coeff = (is_bin ? obj_i.increment : obj_i.coeff),
+			.threshold = obj_i.threshold
+		};
+
+		this->objs.push_back(obj);
+	}
+}

@@ -232,7 +232,6 @@ struct Preprocess::Chunk
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
 	Chunk_state state;
-	// uint8_t is_fixed = 0;
 	Array<Instance::Idx_dur> ops;
 	Array<idx_t> fix_links;
 };
@@ -243,11 +242,10 @@ struct Preprocess::Obj
 {
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
-	idx_t route = IDX_MAX;
 	idx_t level = IDX_MAX;
+	idx_t route = IDX_MAX;
 	uint8_t is_bin = 0;
 	uint8_t coeff = 0;
-	uint8_t n_routes = 1;
 	tim_t threshold = 0;
 
 	inline bool operator==(const Obj& x)
@@ -266,6 +264,7 @@ struct Preprocess::Train
 	idx_t route_first = IDX_MAX;
 	idx_t junct_first = IDX_MAX;
 	idx_t level_first = IDX_MAX;
+	idx_t chunk_first = IDX_MAX;
 	
 	Array<Op> 		ops;
 	Array<Junction> juncts; 

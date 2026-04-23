@@ -1,5 +1,9 @@
 #include "chunk_manager.hpp"
 
+#include <iostream>
+#include <algorithm>
+
+#include "utils/stl_print.hpp"
 
 using namespace std;
 
@@ -25,18 +29,31 @@ void Chunk_manager::init_data()
 }
 
 
+void Chunk_manager::init_levels()
+{
+	this->level_chunks.resize(this->prepr.n_levels());
+}
+
+
 void Chunk_manager::init_chunks()
 {
 	size_t n_chunks = this->prepr.n_chunks();
 
 	this->time_dirty.set_n_items(n_chunks);
 	this->state_dirty.set_n_items(n_chunks);
+	this->is_active.set_n_items(n_chunks);
 
-	this->chunks.resize(n_chunks);
+	this->state.resize(n_chunks);
+	this->time.resize(n_chunks, {TIM_MAX, TIM_MAX});
+	this->link.resize(n_chunks);
+	this->res_idx.resize(n_chunks);
+	this->train_idx.resize(n_chunks);
+
 	for (auto& chunk : this->prepr.chunks) {
-		this->chunks[chunk.idx].prepr = &chunk;
+		this->res_idx[chunk.idx] = chunk.res;
+		this->train_idx[chunk.idx] = chunk.train;
 	}
-}
+} 
 
 
 void Chunk_manager::init_res()
@@ -46,23 +63,29 @@ void Chunk_manager::init_res()
 	this->res_data.resize(this->prepr.n_chunks());
 
 	auto res_range = this->inst.res_range();
+	auto chunk_range = this->prepr.chunks_range();
 
 	for (auto r : res_range) {
-		this->res[r].set_size(0);
+		this->res[r].idx = r;
+		this->res[r].cap = 0;
 	}
 
-	for (auto& chunk : this->prepr.chunks) {
-		this->res[chunk.res].increment_size(1);
+	for (auto c : chunk_range) {
+		this->res[this->res_idx[c]].cap += 1;
 	}
 
-	size_t res_chunk_idx = 0;
-	for (auto r : res_range) {
-		res[r].assign_offset(this->res_data, res_chunk_idx, true);
+	size_t data_idx = 0;
+	for (auto& res : this->res) {
+		res.chunks = &this->res_data[data_idx];
+		data_idx += res.cap;
+		res.cap = 0;
 	}
-	assert(res_chunk_idx == this->prepr.n_chunks());
 
-	for (auto& chunk : this->chunks) {
-		res[chunk.prepr->res].push_back(&chunk);
+	assert(data_idx == this->prepr.n_chunks());
+
+	for (auto c : chunk_range) {
+		auto& res = this->res[this->res_idx[c]];
+		res.chunks[res.cap++] = c;
 	}
 };
 
@@ -77,30 +100,105 @@ void Chunk_manager::sync_state()
 	this->state_dirty.get_true_list(this->slvr.need_list);
 
 	for (auto c : this->slvr.need_list) {
-		Chunk& chunk = this->chunks[c];
-		Chunk_state new_state;
+		auto& chunk = this->prepr.chunks[c];
+		
+		Chunk_state new_state = {{IDX_MAX, IDX_MAX}, 0};
 
-		for (auto chunk_op : chunk.prepr->ops) {
-			if (this->slvr.route_plnr->is_op_active[chunk_op.idx]) {
-				auto& op = this->prepr.ops[chunk_op.idx];
-				
-				new_state.level.start = (new_state.level.start == IDX_MAX) ? 
-					op.level.start : new_state.level.start;
+		
 
-				new_state.level.end = op.level.end;
-				new_state.rel_time = chunk_op.rel_time;
+		this->is_active -= c;
+
+		this->new_link_fwd.clear();
+		this->new_link_bkwd.clear();
+
+		for (auto o : chunk.ops) {
+			if (!this->slvr.route_plnr->is_op_active[o.idx]) {
+				continue;
+			}
+
+			this->is_active += c;
+
+			auto& op = this->prepr.ops[o.idx];
+			
+			new_state.level.start = (new_state.level.start == IDX_MAX) ? 
+				op.level.start : new_state.level.start;
+
+			new_state.level.end = op.level.end;
+			new_state.rel_time = o.rel_time;
+
+			
+
+			for (auto x : op.chunks) {
+				if (x == c) { continue; }
+				this->new_link_fwd.insert(x);
+				this->new_link_bkwd.insert(x);
+			}
+
+			for (auto p : op.inst->pred) {
+				if (!this->slvr.route_plnr->is_op_active[p]) {
+					continue;
+				}
+
+				for (auto x : this->prepr.ops[p].chunks) {
+					if (x == c) { continue; }
+					this->new_link_bkwd.insert(x);
+				}
+			}
+
+			for (auto s : op.inst->succ) {
+				if (!this->slvr.route_plnr->is_op_active[s]) {
+					continue;
+				}
+
+				for (auto x : this->prepr.ops[s].chunks) {
+					if (x == c) { continue; }
+					this->new_link_fwd.insert(x);
+				}
 			}
 		}
 
-		if (chunk.state != new_state) {
-			this->update_level_chunks(chunk.prepr->idx, 
-				chunk.state.level.start, new_state.level.start);
+		auto& state = this->state[c];
+		if (state != new_state) {
+			this->update_level_chunks(c, state.level.start, new_state.level.start);
+			this->update_level_chunks(c, state.level.end, new_state.level.end);
 
-			this->update_level_chunks(chunk.prepr->idx, 
-				chunk.state.level.end, new_state.level.end);
+			state = new_state;
 
-			chunk.state = new_state;
-			this->time_dirty += chunk.prepr->idx;
+			this->time_dirty += c;
+			this->need_time_sync = true;
+
+			this->slvr.conf_rslvr->chunk_state_change(c);
+		}
+
+		auto& link = this->link[c];
+		if (link.fwd != this->new_link_fwd) {
+			for (auto x : link.bkwd) {
+				this->link[x].fwd.erase(c);
+				this->slvr.conf_rslvr->chunk_link_change(x);
+			}
+
+			link.fwd = this->new_link_fwd;
+			this->slvr.conf_rslvr->chunk_link_change(c);
+
+			for (auto x : link.bkwd) {
+				this->link[x].fwd.insert(c);
+				this->slvr.conf_rslvr->chunk_link_change(x);
+			}
+		}
+
+		if (link.bkwd != this->new_link_bkwd) {
+			for (auto x : link.bkwd) {
+				this->link[x].bkwd.erase(c);
+				this->slvr.conf_rslvr->chunk_link_change(x);
+			}
+
+			link.bkwd = this->new_link_bkwd;
+			this->slvr.conf_rslvr->chunk_link_change(c);
+
+			for (auto x : link.bkwd) {
+				this->link[x].bkwd.insert(c);
+				this->slvr.conf_rslvr->chunk_link_change(x);
+			}
 		}
 	}
 
@@ -109,35 +207,61 @@ void Chunk_manager::sync_state()
 }
 
 
+void Chunk_manager::print_links()
+{
+	for (auto c : this->prepr.chunks_range()) {
+		if (this->print_chunk_link(c)) {
+			cout << endl;
+		}
+	}
+}
+
+
+bool Chunk_manager::print_chunk_link(idx_t c)
+{
+	auto& link = this->link[c];
+	if (link.fwd.empty() && link.bkwd.empty()) { return false; }
+
+	cout << c; 
+	if (!link.fwd.empty()) {
+		cout << " fwd: " << link.fwd;
+	}
+	if (!link.bkwd.empty()) {
+		cout << " bkwd: " << link.bkwd;
+	}
+
+	return true;
+}
+
+
 void Chunk_manager::sync_time()
 {
 	this->sync_state();
-	this->slvr.sync_graph_time();
+	this->slvr.sync_graph();
 
 	if (!this->need_time_sync) {
 		return;
 	}
 
-
 	this->time_dirty.get_true_list(this->slvr.need_list);
 	for (auto c : this->slvr.need_list) {
-		Chunk& chunk = this->chunks[c];
+		auto& state = this->state[c];
+		auto& time = this->time[c];
 
 		Interval<tim_t> new_time;
 
-		if (chunk.is_active()) {
-			new_time.start = this->slvr.time(chunk.state.level.start);
-			new_time.end = this->slvr.time(chunk.state.level.end) +
-				chunk.state.rel_time;
+		if (this->is_active[c]) {
+			new_time.start = this->slvr.time(state.level.start);
+			new_time.end = this->slvr.time(state.level.end) + state.rel_time;
 		}
 		else {
 			new_time = {TIM_MAX, TIM_MAX};
 		}
 
-		if (chunk.time != new_time) {
-			chunk.time = new_time;
+		if (time != new_time) {
+			time = new_time;
 
-			this->res_dirty += chunk.prepr->res;
+			this->res_dirty += this->res_idx[c];
 			this->need_res_sync = true;
 		}
 	}
@@ -155,25 +279,29 @@ void Chunk_manager::sync_res()
 		return;
 	}
 
+	auto time_cmp = Time_cmp(this->time);
+
 	this->res_dirty.get_true_list(this->slvr.need_list);
 	for (auto r : this->slvr.need_list) {
-		auto& rc = this->res[r];
+		auto& res = this->res[r];
 
 		size_t i = 0;
-		size_t j = rc.size() - 1;
+		res.size = res.cap;
 
-		while (i < j) {
-			if (!rc[i]->has_active_time()) {
-				swap(rc[i], rc[j]);
-				j--;
+		while (i < res.size) {
+			idx_t c = res.chunks[i];
+			if (this->is_active[c]) {
+				assert((this->time[c].start < TIM_MAX) && (this->time[c].end < TIM_MAX));
+				i++;
 			}
 			else {
-				assert(rc[i]->is_active());
-				i++;
+				assert(this->time[c] == Interval<tim_t>(TIM_MAX, TIM_MAX));
+				swap(res.chunks[i], res.chunks[res.size - 1]);
+				res.size--;
 			}
 		}
 
-		sort(&rc[0], &rc[j], Chunk::ptr_cmp);
+		sort(res.chunks, &res.chunks[res.size], time_cmp);
 	}
 
 	this->res_dirty.clear();

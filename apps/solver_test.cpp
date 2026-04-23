@@ -18,7 +18,7 @@ int main(int argc, char const *argv[])
 
 	GRBEnv grb_env = GRBEnv(true);
 	try {
-		// grb_env.set(GRB_IntParam_OutputFlag, 0);
+		grb_env.set(GRB_IntParam_OutputFlag, 0);
 		// grb_env.set(GRB_IntParam_ThreadLimit, 1);
 	}
 	catch (const GRBException& ex) {

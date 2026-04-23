@@ -21,7 +21,7 @@ Route_planner::~Route_planner()
 void Route_planner::make_init_routes()
 {
 	this->assign_all_random_sections();
-	this->assign_all_sections_dur(1.5);
+	this->assign_all_sections_dur(0.5);
 	this->slvr.chunk_mngr->sync_res();
 
 	this->freeze_all();
@@ -283,7 +283,7 @@ void Route_planner::assign_op_dur(Op& op, dur_t new_dur)
 {
 	if (new_dur != op.dur && op.active) {
 		this->op_graph_dirty += op.prepr->idx;
-		this->need_op_graph_sync = true;
+		this->need_graph_sync = true;
 	}
 
 	op.dur = new_dur;
@@ -324,7 +324,7 @@ void Route_planner::sync_route_ops()
 			}
 
 			this->op_graph_dirty += o;
-			this->need_op_graph_sync = true;
+			this->need_graph_sync = true;
 
 			for (auto c : op.prepr->chunks) {
 				this->slvr.chunk_mngr->state_change(c);
@@ -338,11 +338,11 @@ void Route_planner::sync_route_ops()
 
 
 
-void Route_planner::sync_op_graph()
+void Route_planner::sync_graph()
 {
 	this->sync_route_ops();
 
-	if (!this->need_op_graph_sync) {
+	if (!this->need_graph_sync) {
 		return;
 	}
 	
@@ -354,7 +354,7 @@ void Route_planner::sync_op_graph()
 		Edge new_edge = op.to_edge();
 		if (op.curr_edge != new_edge) {
 			this->slvr.event_graph.update_edge(op.curr_edge, new_edge);
-			this->slvr.graph_time_change();
+			this->slvr.graph_change();
 
 			op.curr_edge = new_edge;
 		}
@@ -365,13 +365,13 @@ void Route_planner::sync_op_graph()
 				op.prepr->level.start, op.prepr->inst->start_lb);
 			
 			if (lb_diff) {
-				this->slvr.graph_time_change();
+				this->slvr.graph_change();
 			}
 		}
 	}
 
 	this->op_graph_dirty.clear();
-	this->need_op_graph_sync = false;
+	this->need_graph_sync = false;
 }
 
 

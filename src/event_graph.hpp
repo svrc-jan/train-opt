@@ -11,11 +11,20 @@
 #include "utils/flag.hpp"
 #include "utils/lex_comp.hpp"
 
+
+
 class Event_graph
 {
-
 public:
+	enum Sync_state
+	{
+		NO_CHANGES,
+		TIME_UPDATE,
+		CYCLE_FOUND
+	};
+
 	struct Edge;
+	struct Ordering;
 	struct Vertex_edge;
 
 	typedef uint16_t edg_t;
@@ -30,7 +39,7 @@ public:
 
 	std::vector<tim_t> time = {};
 	std::vector<vtx_t> cycle_found_vtx = {};
-
+	
 	Event_graph(const size_t n_vtx=0);
 	~Event_graph() {}
 
@@ -51,13 +60,9 @@ public:
 
 	void set_all_edge_idx(edg_t idx);
 
-	/* return false if cycle */
-	bool sync_cycle();
+	Sync_state sync(Flag& time_change);
 
-	/* return true if changes */
-	bool sync_time(Flag& time_change);
-
-	void get_cycle_path(std::vector<Vertex_edge>& ret, vtx_t start);
+	void get_cycle_path(std::vector<Vertex_edge>& ret, vtx_t target);
 	void get_critical_path(std::vector<Vertex_edge>& ret, vtx_t end);
 	
 private:
@@ -67,12 +72,9 @@ private:
 	std::vector<std::vector<Edge_entry>> edges_out = {};
 	std::vector<std::vector<Edge_entry>> edges_in = {};
 
-	uint8_t need_cycle_sync = false;
-	uint8_t need_time_sync = false;
+	uint8_t need_sync = false;
 
-	Flag cycle_dirty;
-	Flag time_dirty;
-
+	Flag vtx_dirty;
 	Flag visited;
 	Flag rec_stack;
 
@@ -86,9 +88,8 @@ private:
 
 	std::queue<vtx_t> queue_;
 
-	bool update_cycle_rec(vtx_t v);
+	bool update_dfs(vtx_t v);
 	void update_cycle_paths();
-	void update_time_stack(vtx_t v);
 	bool update_time_clear(vtx_t v, Flag& time_change);
 
 
@@ -136,4 +137,21 @@ struct Event_graph::Vertex_edge
 	Vertex_edge() : v(VTX_MAX), e(EDG_MAX) {}
 	Vertex_edge(vtx_t v, edg_t e) : v(v), e(e) {}
 	Vertex_edge(const Edge_entry& x) : v(x.v), e(x.e) {}
+};
+
+
+struct Event_graph::Ordering
+{
+	vtx_t from = VTX_MAX;
+	vtx_t to = VTX_MAX;
+	dur_t dur = 0;
+
+	Edge to_edge(edg_t idx=EDG_MAX) const
+	{ return Edge({from, to}, dur, idx); }
+
+	inline bool operator==(const Ordering& x) const
+	{ return (from == x.from) && (to == x.to) && (dur == x.dur); }
+
+	inline bool operator!=(const Ordering& x) const
+	{ return !(*this == x); }
 };

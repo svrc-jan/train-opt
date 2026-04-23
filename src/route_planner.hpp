@@ -13,10 +13,6 @@ class Route_planner
 public:
 	struct Op;
 	struct Route;
-	struct Level;
-	struct Chunk;
-
-	struct Flow_cons;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -44,11 +40,12 @@ public:
 
 	void init_data();
 	void sync_route_ops();
-	void sync_op_graph();
-	void make_init_routes();
-
+	void sync_graph();
+	void make_init_routes(); 
 
 private:
+	struct Flow_cons;
+	
 	Solver& slvr;
 	GRBModel model;
 
@@ -61,7 +58,7 @@ private:
 	std::vector<GRBConstr> flow_constr = {};
 
 	uint8_t need_route_op_sync = false;
-	uint8_t need_op_graph_sync = false;
+	uint8_t need_graph_sync = false;
 
 	Flag op_graph_dirty;
 	Flag route_op_dirty;
@@ -96,7 +93,6 @@ private:
 
 	void assign_all_sections_dur(double stretch=1.0);
 	void assign_section_dur(const Preprocess::Section& sect, double stretch=0.0);
-
 	void assign_op_dur(Op& op, dur_t new_dur);
 };
 
@@ -124,25 +120,4 @@ struct Route_planner::Route
 	GRBLinExpr to_expr() const { return (is_req ? 1 : GRBLinExpr(var)); }
 	void freeze();
 	void unfreeze();
-};
-
-
-struct Route_planner::Level
-{
-	uint8_t is_fixed = false;
-	uint8_t in_model = false;
-	tim_t lb = 0;
-	tim_t ub = TIM_MAX;
-	GRBVar var;
-	const Preprocess::Level* prepr = nullptr;
-	GRBLinExpr to_expr() const { return (is_fixed ? lb : GRBLinExpr(var)); }
-};
-
-
-struct Route_planner::Chunk
-{
-	Interval<tim_t> ub = {0, 0};
-	Interval<tim_t> lb = {TIM_MAX, TIM_MAX};
-	Interval<GRBVar> var;
-	const Preprocess::Chunk* prepr = nullptr;
 };
