@@ -48,6 +48,7 @@ public:
 
 	void sort() { std::sort(this->begin(), this->end()); }
 	bool is_asc() const;
+	bool is_asc_strict() const;
 
 	template<typename X>
 	const T* find(const X& x) const;
@@ -111,6 +112,20 @@ bool Array<T>::is_asc() const
 	const T* it_prev = this->_begin;
 	for(const T* it = this->_begin + 1; it < this->_end; it++) {
 		if (*it < *it_prev) {
+			return false;
+		}
+		it_prev = it;
+	}
+
+	return true;
+}
+
+template<typename T>
+bool Array<T>::is_asc_strict() const
+{
+	const T* it_prev = this->_begin;
+	for(const T* it = this->_begin + 1; it < this->_end; it++) {
+		if (*it <= *it_prev) {
 			return false;
 		}
 		it_prev = it;

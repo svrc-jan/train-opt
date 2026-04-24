@@ -18,4 +18,8 @@ struct Unord_pair
 
 	inline bool operator==(const Unord_pair& x) const
 	{ return LEX_EQ2(first, second, x.first, x.second); }
+
+	inline bool operator<=(const Unord_pair& x) const
+	{ return (*this == x) || (*this < x); }
+	
 };

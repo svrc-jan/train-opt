@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <limits>
 #include <unordered_map>
 
@@ -21,15 +22,17 @@ public:
 	typedef Instance::idx_t idx_t;
 	typedef uint32_t lnk_t;
 
-	static constexpr lnk_t FWD_MSK = ((uint32_t)1 << 31);
-	static constexpr lnk_t BKW_MSK = ((uint32_t)1 << 30);
-	static constexpr lnk_t BTH_MSK = FWD_MSK | BKW_MSK;
+	static constexpr lnk_t ACT_MSK = ((uint32_t)1 << 31);
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
-	static constexpr lnk_t LNK_MAX = (std::numeric_limits<lnk_t>::max() & ~BTH_MSK);
+	static constexpr lnk_t LNK_MAX = (std::numeric_limits<lnk_t>::max() & ~ACT_MSK);
 
 	std::vector<Chunk> chunks;
 	std::vector<Conf> confs;
+
+	typedef std::pair<Unord_pair<idx_t>, Unord_pair<idx_t>> Chain;
+	std::vector<Chain> par_chains = {};
+	std::vector<Chain> opp_chains = {};
 
 	Flag chunk_conf_dirty;
 
@@ -48,6 +51,11 @@ public:
 
 	std::queue<lnk_t> queue_;
 
+	template <bool first, bool fwd>
+	void make_conf_link_set(std::set<lnk_t>& link_set, const Conf& conf,
+		std::set<lnk_t>& helper1, std::set<lnk_t>& helper2,
+		std::set<lnk_t>& helper_res);
+
 	void print_chains();
 
 private:
@@ -58,7 +66,10 @@ private:
 	void make_chunks();
 	void make_chunk_links();
 	void make_confs();
-	void make_conf_links();
+
+	void make_chains(std::vector<Chain>& chains, 
+		const Array<Link>& links_first,
+		const Array<Link>& links_second);
 
 	Conf* find_conf(const Unord_pair<idx_t>& chunk);
 };
@@ -79,21 +90,34 @@ struct Link_graph::Chunk
 
 // size_t link_chunk_size = sizeof(Link_graph::Chunk);
 
+struct Link_graph::Conf
+{
+	lnk_t idx = LNK_MAX;
+	idx_t res = IDX_MAX;
+	Unord_pair<idx_t> train;
+	Unord_pair<idx_t> chunk;
+	Array<Link> par;
+	Array<Link> opp;
+	Array<Link> all;
+
+	bool operator<(const Unord_pair<idx_t>& x) const { return chunk < x; }
+	bool operator==(const Unord_pair<idx_t>& x) const { return chunk == x; }
+
+	bool operator<(const Conf& x) const { return chunk < x.chunk; }
+	bool operator==(const Conf& x) const { return chunk == x.chunk; }
+};
+
+
 class Link_graph::Link
 {
 public:
 	Link(const lnk_t & value=LNK_MAX) : value(value & LNK_MAX) {}
 	inline lnk_t idx() const { return (value & LNK_MAX); }
 
-	inline bool active() const { return ((value & BTH_MSK) != 0); }
-	inline bool is_fwd() const { return ((value & FWD_MSK) != 0); }
-	inline bool is_bkw() const { return ((value & BKW_MSK) != 0); }
-	inline bool is_both() const { return (value >= BTH_MSK); }
+	inline bool active() const { return ((value & ACT_MSK) != 0); }
 
-	inline void set_false() { value &= ~BTH_MSK; }
-	inline void set_true() { value |= BTH_MSK; }
-	inline void set_fwd() { value |= FWD_MSK; }
-	inline void set_bkw() { value |= BKW_MSK; }
+	inline void set_false() { value &= ~ACT_MSK; }
+	inline void set_true() { value |= ACT_MSK; }
 
 	template<typename T>
 	bool operator<(const T& x) const { return idx() < x; }
@@ -101,22 +125,15 @@ public:
 	template<typename T>
 	bool operator==(const T& x) const { return idx() == x; }
 
+	template<typename T>
+	bool operator<=(const T& x) const { return idx() <= x; }
+
+	bool operator<(const Link& x) const { return idx() < x.idx(); }
+	bool operator==(const Link& x) const { return idx() == x.idx(); }
+	bool operator<=(const Link& x) const { return idx() <= x.idx(); }
+
+
 private:
 	lnk_t value = IDX_MAX;
-};
-
-struct Link_graph::Conf
-{
-	lnk_t idx = LNK_MAX;
-	Unord_pair<idx_t> chunk;
-
-	std::set<lnk_t> par;
-	std::set<lnk_t> opp;
-
-	bool operator<(const Unord_pair<idx_t>& x) const { return chunk < x; }
-	bool operator==(const Unord_pair<idx_t>& x) const { return chunk == x; }
-
-	bool operator<(const Conf& x) const { return chunk < x.chunk; }
-	bool operator==(const Conf& x) const { return chunk == x.chunk; }
 };
 

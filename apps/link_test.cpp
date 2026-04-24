@@ -46,9 +46,6 @@ int main(int argc, char const *argv[])
 				o = s;
 			}
 		}
-
-		link_graph.build_all_conf_links();
-		link_graph.print_chains();
 	}
 
 	return 0;
