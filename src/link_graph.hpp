@@ -2,7 +2,7 @@
 
 #include <set>
 #include <limits>
-#include <unordered_map>
+#include <map>
 
 #include "utils/unord_pair.hpp"
 #include "utils/flag.hpp"
@@ -28,13 +28,12 @@ public:
 	static constexpr lnk_t LNK_MAX = (std::numeric_limits<lnk_t>::max() & ~ACT_MSK);
 
 	std::vector<Chunk> chunks;
-	std::vector<Conf> confs;
 
-	typedef std::pair<Unord_pair<idx_t>, Unord_pair<idx_t>> Chain;
-	std::vector<Chain> par_chains = {};
-	std::vector<Chain> opp_chains = {};
+	typedef Unord_pair<Unord_pair<idx_t>> Link_conf;
+	std::vector<Link_conf> par_link_confs = {};
+	std::vector<Link_conf> opp_link_confs = {};
 
-	Flag chunk_conf_dirty;
+	std::map<Unord_pair<idx_t>, lnk_t> chunks_to_conf; 
 
 	Link_graph(const Preprocess& prepr);
 
@@ -65,11 +64,9 @@ private:
 
 	void make_chunks();
 	void make_chunk_links();
-	void make_confs();
 
-	void make_chains(std::vector<Chain>& chains, 
-		const Array<Link>& links_first,
-		const Array<Link>& links_second);
+	template<bool first_fwd, bool second_fwd>
+	void make_chunks_link_confs(const Chunk& chunk_first, const Chunk& chunk_second);
 
 	Conf* find_conf(const Unord_pair<idx_t>& chunk);
 };
@@ -98,7 +95,6 @@ struct Link_graph::Conf
 	Unord_pair<idx_t> chunk;
 	Array<Link> par;
 	Array<Link> opp;
-	Array<Link> all;
 
 	bool operator<(const Unord_pair<idx_t>& x) const { return chunk < x; }
 	bool operator==(const Unord_pair<idx_t>& x) const { return chunk == x; }
