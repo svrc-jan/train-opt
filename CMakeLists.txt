@@ -52,6 +52,9 @@ target_link_libraries(preprocess_test preprocess)
 add_executable(graph_test apps/graph_test.cpp)
 target_link_libraries(graph_test event_graph)
 
+add_executable(link_test apps/link_test.cpp)
+target_link_libraries(link_test link_graph)
+
 add_executable(solver_test apps/solver_test.cpp)
 target_link_libraries(solver_test solver)
 

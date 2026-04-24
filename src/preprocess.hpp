@@ -46,7 +46,7 @@ public:
 	std::vector<Obj> 	  objs 	 = {};
 	std::vector<Train> 	  trains = {};
 
-	std::vector<idx_t> res_n_chunks = {};
+	std::vector<Array<idx_t>> res_chunks = {};
 	std::vector<idx_t> ops_req = {};
 
 	size_t chunk_direct_merges = 0;
@@ -91,7 +91,8 @@ private:
 	std::vector<Instance::Idx_dur> chunk_ops = {};
 	std::vector<idx_t> op_chunks = {};
 
-	std::vector<idx_t> chunk_fix_links = {};
+	std::vector<Array<Chunk>> train_chunks = {};
+	std::vector<idx_t> res_chunks_data = {};
 
 	std::set<idx_t> set_;
 	std::queue<idx_t> queue_;
@@ -264,13 +265,13 @@ struct Preprocess::Train
 	idx_t route_first = IDX_MAX;
 	idx_t junct_first = IDX_MAX;
 	idx_t level_first = IDX_MAX;
-	idx_t chunk_first = IDX_MAX;
 	
 	Array<Op> 		ops;
 	Array<Junction> juncts; 
 	Array<Level> 	levels;
 	Array<Route> 	routes;
 	Array<Section>	sects;
+	Array<Chunk>*	chunks = nullptr;
 	Array<Obj> 		objs;
 
 	const Instance::Train* inst = nullptr;

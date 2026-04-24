@@ -53,6 +53,9 @@ public:
 	const T* find(const X& x) const;
 
 	template<typename X>
+	T* find_asc(const X& x);
+
+	template<typename X>
 	const T* find_asc(const X& x) const;
 
 	template<typename C, typename I>
@@ -146,6 +149,33 @@ const T* Array<T>::find_asc(const X& x) const
 
 	do {
 		const T* m = l + (r - l)/2;
+
+		ret = (*m == x) ? m : ret;
+
+		bool mid_greater = *m < x;
+		l = (mid_greater) ? m + 1 : l;
+		r = (mid_greater) ? r : m - 1;
+	}
+	while (ret == nullptr && l <= r);
+
+	return ret;
+}
+
+template<typename T>
+template<typename X>
+T* Array<T>::find_asc(const X& x)
+{
+	if (this->empty()) {
+		return nullptr;
+	}
+
+	T* l = this->_begin;
+	T* r = this->_end - 1;
+
+	T* ret = nullptr;
+
+	do {
+		T* m = l + (r - l)/2;
 
 		ret = (*m == x) ? m : ret;
 

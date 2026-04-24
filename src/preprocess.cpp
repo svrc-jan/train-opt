@@ -664,6 +664,7 @@ void Preprocess::make_section_min_dur()
 void Preprocess::make_resource_chunks()
 {
 	size_t n_res = this->inst.n_res;
+	size_t n_trains = this->n_trains();
 	auto res_range = this->inst.res_range();
 
 	size_t max_ops_count[n_res];
@@ -673,7 +674,10 @@ void Preprocess::make_resource_chunks()
 		max_ops_count[r] = 0;	
 	}
 	
-	for (auto& train : this->trains) {	
+	this->train_chunks.resize(n_trains*n_res);
+	for (auto& train : this->trains) {
+		train.chunks = &(this->train_chunks[train.idx*n_res]);
+
 		for (auto r : res_range) {
 			train_ops_count[r] = 0;	
 		}
@@ -695,24 +699,21 @@ void Preprocess::make_resource_chunks()
 		res_ops[r].reserve(max_ops_count[r]);
 	}
 
-	this->chunks.clear();
-	this->chunk_ops.clear();
 	this->chunks.reserve(this->inst.n_op_res());
 	this->chunk_ops.reserve(this->inst.n_op_res());
-
 
 	this->chunk_direct_merges = 0;
 	this->chunk_parallel_merges = 0;
 
 	set<idx_t> op_set = {};
 	set<idx_t> conn_op_set;
+
+	size_t chunk_idx = 0;
 	
 	for (auto& train : this->trains) {	
 		for (auto r : res_range) {
 			res_ops[r].clear();
 		}
-
-		
 
 		for (auto& op : train.inst->ops) {
 
@@ -727,6 +728,7 @@ void Preprocess::make_resource_chunks()
 		}
 
 		for (auto r : res_range) {
+
 			auto& ro = res_ops[r];
 			size_t n = res_ops[r].size();
 
@@ -739,14 +741,16 @@ void Preprocess::make_resource_chunks()
 					this->merge_res_op(ro, i, r, false, conn_op_set);
 				}
 			}
-			
+
+			train.chunks[r].set_size(0);
+
 			for (size_t i = 0; i < n; i++) {
 				if (ro[i].prev < CNT_MAX) {
 					continue;
 				}
 
 				Chunk chunk = {
-					.idx = (idx_t)this->chunks.size(),
+					.idx = (idx_t)chunk_idx++,
 					.train = train.idx,
 					.res = r,
 					.state = {
@@ -770,15 +774,28 @@ void Preprocess::make_resource_chunks()
 					j = ro[j].next;
 				}
 
+				train.chunks[r].increment_size(1);
 				this->chunks.push_back(chunk);
 			}
 		}
 	}
 
-	assert(this->n_chunks() < IDX_MAX);
+	assert(chunk_idx < IDX_MAX);
+	assert(chunk_idx == this->n_chunks());
+	
+	this->chunks.shrink_to_fit();
 
-	assert(this->n_chunks() + this->chunk_direct_merges +
+	assert(chunk_idx + this->chunk_direct_merges +
 		this->chunk_parallel_merges == this->inst.n_op_res());
+	
+
+	chunk_idx = 0;
+	for (auto& train : this->trains) {
+		for (auto r : res_range) {
+			train.chunks[r].assign_offset(this->chunks, chunk_idx, false);
+		}
+	}
+	assert(chunk_idx == this->n_chunks());
 
 	size_t chunk_ops_idx = 0;
 	for (auto& chunk : this->chunks) {
@@ -794,6 +811,27 @@ void Preprocess::make_resource_chunks()
 			chunk.state.level.end = MAX(chunk.state.level.end, op.level.end);
 			chunk.state.rel_time = MIN(chunk.state.rel_time, o.rel_time);
 		}
+	}
+
+	this->res_chunks.resize(n_res);
+	this->res_chunks_data.resize(chunk_idx);
+
+	for (auto r : res_range) {
+		this->res_chunks[r].set_size(0);
+	}
+
+	for (auto& chunk : this->chunks) {
+		this->res_chunks[chunk.res].increment_size(1);
+	}
+
+	chunk_idx = 0;
+	for (auto r : res_range) {
+		this->res_chunks[r].assign_offset(this->res_chunks_data, chunk_idx, true);
+	}
+	assert(chunk_idx == this->n_chunks());
+
+	for (auto& chunk : this->chunks) {
+		this->res_chunks[chunk.res].push_back(chunk.idx);
 	}
 }
 

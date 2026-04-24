@@ -6,6 +6,9 @@ target_link_libraries(instance json_aux)
 add_library(preprocess preprocess.cpp)
 target_link_libraries(preprocess instance disjoint_set flag)
 
+add_library(link_graph link_graph.cpp)
+target_link_libraries(link_graph preprocess)
+
 add_library(event_graph event_graph.cpp)
 target_link_libraries(event_graph flag)
 
@@ -26,4 +29,3 @@ target_link_libraries(route_planner solver)
 
 target_include_directories(conflict_resolver PUBLIC ${GUROBI_INC})
 target_link_libraries(conflict_resolver solver)
-

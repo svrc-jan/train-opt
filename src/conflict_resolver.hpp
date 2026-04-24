@@ -1,8 +1,7 @@
 #pragma once
 
-#include "utils/lex_comp.hpp"
+#include "utils/unord_pair.hpp"
 #include "solver.hpp"
-
 
 class Solver;
 
@@ -141,14 +140,11 @@ struct Conflict_resolver::Obj
 
 struct Conflict_resolver::Link
 {
-	typedef std::pair<idx_t, idx_t> Idx;
-	Idx idx = {IDX_MAX, IDX_MAX};
+	Unord_pair<idx_t> idx = {IDX_MAX, IDX_MAX};
 	GRBConstr cons;
 
-	Link(idx_t a, idx_t b) : idx((a < b) ? Idx(a, b) : Idx(b, a)) { assert(a != b); }
-
-	inline bool operator<(const std::pair<idx_t, idx_t>& x) const { return (idx < x); }
-	inline bool operator==(const std::pair<idx_t, idx_t>& x) const { return (idx == x); }
+	inline bool operator<(const Unord_pair<idx_t>& x) const { return (idx < x); }
+	inline bool operator==(const Unord_pair<idx_t>& x) const { return (idx == x); }
 
 	inline bool operator<(const Link& x) const { return (idx < x.idx); }
 	inline bool operator==(const Link& x) const { return (idx == x.idx); }

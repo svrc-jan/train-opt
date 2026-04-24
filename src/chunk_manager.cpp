@@ -309,7 +309,6 @@ void Chunk_manager::sync_res()
 }
 
 
-
 bool Chunk_manager::update_level_chunks(idx_t c, idx_t l_old, idx_t l_new)
 {
 	if (l_old == l_new) {
@@ -328,5 +327,7 @@ bool Chunk_manager::update_level_chunks(idx_t c, idx_t l_old, idx_t l_new)
 
 	return true;
 }
+
+
 
 

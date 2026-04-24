@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "utils/unord_pair.hpp"
 #include "instance.hpp"
 #include "preprocess.hpp"
 #include "solver.hpp"
@@ -14,6 +15,7 @@ class Chunk_manager
 public:
 	struct Link;
 	struct Res;
+	struct Chain;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -63,6 +65,7 @@ public:
 	inline bool is_fwd_link(idx_t c_from, idx_t c_to);
 	inline bool is_bkwd_link(idx_t c_from, idx_t c_to);
 	inline bool is_any_link(idx_t a, idx_t b);
+
 
 	inline Ordering get_ordering(idx_t c_from, idx_t c_to) const;
 
