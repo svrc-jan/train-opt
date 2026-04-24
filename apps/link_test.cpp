@@ -31,21 +31,21 @@ int main(int argc, char const *argv[])
 		Preprocess prepr(inst, true);
 		Link_graph link_graph(prepr);
 
-		for (auto& train : inst.trains) {
-			uint16_t o = train.op_first;
-			link_graph.link_op_self(o);
+		// for (auto& train : inst.trains) {
+		// 	uint16_t o = train.op_first;
+		// 	link_graph.link_op_self(o);
 
-			while (true) {
-				auto& op = inst.ops[o];
-				if (op.n_succ() == 0) {
-					break;
-				}
+		// 	while (true) {
+		// 		auto& op = inst.ops[o];
+		// 		if (op.n_succ() == 0) {
+		// 			break;
+		// 		}
 
-				uint16_t s = op.succ.get_random_item();
-				link_graph.link_op_succ(o, s);
-				o = s;
-			}
-		}
+		// 		uint16_t s = op.succ.get_random_item();
+		// 		link_graph.link_op_succ(o, s);
+		// 		o = s;
+		// 	}
+		// }
 	}
 
 	return 0;
