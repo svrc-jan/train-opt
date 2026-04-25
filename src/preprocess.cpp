@@ -1027,6 +1027,7 @@ void Preprocess::get_chunk_link_set(set<idx_t>& link_set, const Chunk& chunk) co
 
 void Preprocess::get_op_links(vector<idx_pr>& links, idx_t o) const
 {
+	links.clear();
 	auto& op_chunks = this->ops[o].chunks;
 	for (auto c1 : op_chunks) {
 		for (auto c2 : op_chunks) {
@@ -1039,10 +1040,11 @@ void Preprocess::get_op_links(vector<idx_pr>& links, idx_t o) const
 }
 
 
-void Preprocess::get_op_succ_links(vector<idx_pr>& links, idx_t o, idx_t s) const
+void Preprocess::get_op_succ_links(vector<idx_pr>& links, const idx_pr& o) const
 {
-	auto& op_chunks = this->ops[o].chunks;
-	auto& succ_chunks = this->ops[s].chunks;
+	links.clear();
+	auto& op_chunks = this->ops[o.first].chunks;
+	auto& succ_chunks = this->ops[o.second].chunks;
 	for (auto c1 : op_chunks) {
 		for (auto c2 : succ_chunks) {
 			if (c1 == c2) { continue; }

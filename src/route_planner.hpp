@@ -2,6 +2,7 @@
 
 #include "gurobi_c++.h"
 
+#include "utils/tracked.hpp"
 #include "instance.hpp"
 #include "preprocess.hpp"
 #include "solver.hpp"
@@ -21,6 +22,7 @@ public:
 	typedef Event_graph::edg_t edg_t; 
 	typedef Event_graph::vtx_t vtx_t; 
 	typedef Event_graph::Edge Edge;
+	typedef Event_graph::Ordering Ordering;
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
@@ -32,15 +34,15 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
-	Flag is_op_active;
-	Flag is_route_active;
-
 	Route_planner(Solver& sovler);
 	~Route_planner();
 
 	void init_data();
-	void sync_route_ops();
-	void sync_graph();
+	
+	void sync_route_to_op();
+	void sync_op_to_route();
+
+	void sync_event_graph();
 	void make_init_routes(); 
 
 private:
@@ -50,18 +52,11 @@ private:
 	GRBModel model;
 
 	double init_dur_stretch = 0.5;
-	double res_dur_stretch = 0.3;
 
 	std::vector<Op> ops = {};
 	std::vector<Route> routes = {};
 
 	std::vector<GRBConstr> flow_constr = {};
-
-	uint8_t need_route_op_sync = false;
-	uint8_t need_graph_sync = false;
-
-	Flag op_graph_dirty;
-	Flag route_op_dirty;
 
 	std::set<idx_t> assign_random_route_set = {};
 
@@ -72,10 +67,8 @@ private:
 
 	void init_ops();
 	void init_routes();
-	void init_levels();
-	void init_chunks();
-
 	void init_model();
+
 	void find_req_routes();
 	void add_route_vars();
 	void add_flow_constr();
@@ -99,21 +92,20 @@ private:
 
 struct Route_planner::Op
 {
-	uint8_t active = 0;
-	tim_t dur = 0;
-	Edge curr_edge = Edge();
-	const Preprocess::Op* prepr = nullptr;
+	Tracked<int8_t> value = {0};
+	Tracked<idx_t> succ = {IDX_MAX};
 
-	Edge to_edge() const { return (active ? Edge(prepr->level, dur, EDG_MAX) : Edge()); }
+	uint8_t in_graph = 0;
+	Tracked<tim_t> dur = {0};
+	const Preprocess::Op* prepr = nullptr;
 };
 
 
 struct Route_planner::Route
 {
-	uint8_t value = 0;
-	uint8_t active = 0;
-	uint8_t is_req = 0;
-	uint8_t is_frozen = 0;
+	Tracked<int8_t> value = {0};
+	int8_t is_req = 0;
+	int8_t is_frozen = 0;
 	GRBVar var;
 	const Preprocess::Route* prepr = nullptr;
 

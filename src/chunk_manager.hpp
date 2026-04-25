@@ -74,10 +74,6 @@ private:
 	struct Time_cmp;
 
 	Solver& slvr;
-
-	uint8_t need_state_sync = false;
-	uint8_t need_time_sync = false;
-	uint8_t need_res_sync = false;
 	
 	Flag state_dirty;
 	Flag time_dirty;

@@ -61,7 +61,7 @@ public:
 
 	void get_chunk_link_set(std::set<idx_t>& link_set, const Chunk& chunk) const;
 	void get_op_links(std::vector<idx_pr>& links, idx_t o) const;
-	void get_op_succ_links(std::vector<idx_pr>& links, idx_t o, idx_t s) const;
+	void get_op_succ_links(std::vector<idx_pr>& links, const idx_pr& o) const;
 
 	
 	METHOD_N(ops)

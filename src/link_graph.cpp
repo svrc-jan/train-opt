@@ -25,10 +25,61 @@ Link_graph::~Link_graph()
 
 }
 
+
+void Link_graph::sync()
+{
+	this->links_change.clear();
+
+	this->op_change.aggregate();
+	for (auto o : op_change) {
+		this->prepr.get_op_links(this->links_hlpr, o.idx);
+		for (auto x : this->links_hlpr) {
+			this->links_change.push_back({x, o.count});
+		}
+	}
+	this->op_change.clear();
+
+	this->op_succ_change.aggregate();
+	for (auto& o : op_succ_change) {
+		this->prepr.get_op_succ_links(this->links_hlpr, o.idx);
+		for (auto x : this->links_hlpr) {
+			this->links_change.push_back({x, o.count});
+		}
+	}
+	this->op_succ_change.clear();
+
+	this->links_change.aggregate();
+	for (auto& x : this->links_change) {
+		assert(x.idx.first != x.idx.second);
+		this->update_link(x);
+	}
+}
+
+
+void Link_graph::update_link(const Batch<idx_pr, int8_t>::Item& item)
+{
+	if (item.count == 0) {
+		return;
+	}
+
+	idx_t c1 = item.idx.first;
+	idx_t c2 = item.idx.second;
+
+
+	auto lnk_fwd = this->chunks[c1].fwd.find_asc(c2);
+	auto lnk_bkw = this->chunks[c2].bkw.find_asc(c1);
+
+	assert(lnk_fwd != nullptr && lnk_bkw != nullptr);
+ 
+	lnk_fwd->count += item.count;
+	lnk_bkw->count += item.count;
+
+	assert(lnk_fwd->count.curr >= 0 && lnk_bkw->count.curr >= 0);
+}
+
 void Link_graph::make_chunks()
 {
 	this->chunks.resize(this->prepr.n_chunks());
-	this->chunk_changed.set_n_items(this->prepr.n_chunks());
 
 	for (auto c : this->prepr.chunks_range()) {
 		auto& chunk = this->chunks[c];
@@ -146,13 +197,14 @@ void Link_graph::print_chains(bool force)
 
 			cout << train1.idx << " : " << train2.idx;
 
+			if (!opp_lengths.empty()) {
+				cout << ", opp: " << opp_lengths; 
+			}
+
 			if (!par_lengths.empty()) {
 				cout << ", par: " << par_lengths; 
 			}
 			
-			if (!opp_lengths.empty()) {
-				cout << ", opp: " << opp_lengths; 
-			}
 
 			cout << endl;
 		}
@@ -243,58 +295,4 @@ void Link_graph::extend_chain_in_dir(set<idx_pr>& chain, const idx_pr& curr_chun
 }
 
 
-void Link_graph::add_links_batch(const vector<idx_pr>& links)
-{
-	vector<Lnk_chg> batch;
-	batch.reserve(links.size());
 
-	for (auto& x : links) {
-		batch.push_back({x, 1});
-	}
-
-	this->change_links_batch(batch);
-}
-
-void Link_graph::change_links_batch(std::vector<Lnk_chg>& batch)
-{
-	sort(batch.begin(), batch.end());
-
-	size_t i = 0;
-
-	for (size_t j = 1; j < batch.size(); j++) {
-		if (batch[i].chunk == batch[j].chunk) {
-			batch[i].count += batch[j].count;
-			batch[j].count = 0;
-		}
-		else {
-			i = j;
-		}
-	}
-
-	for (auto& x : batch) {
-		this->change_link(x);
-	}
-}
-
-void Link_graph::change_link(const Lnk_chg& change)
-{
-	if (change.count == 0) {
-		return;
-	}
-
-	idx_t c1 = change.chunk.first;
-	idx_t c2 = change.chunk.second;
-
-	auto lnk_fwd = this->chunks[c1].fwd.find_asc(c2);
-	auto lnk_bkw = this->chunks[c2].bkw.find_asc(c1);
-
-	assert(lnk_fwd != nullptr && lnk_bkw != nullptr);
- 
-	lnk_fwd->count += change.count;
-	lnk_bkw->count += change.count;
-
-	assert(lnk_fwd->count >= 0 && lnk_bkw->count >= 0);
-
-	this->chunk_changed += c1;
-	this->chunk_changed += c2;
-}

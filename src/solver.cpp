@@ -123,7 +123,7 @@ void Solver::init_levels()
 void Solver::sync_graph()
 {
 	while (true) {
-		this->route_plnr->sync_graph();
+		this->route_plnr->sync_event_graph();
 		this->conf_rslvr->sync_graph();
 
 		if (!this->need_graph_sync) {

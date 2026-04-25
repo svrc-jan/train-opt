@@ -5,6 +5,9 @@
 
 #include "utils/unord_pair.hpp"
 #include "utils/flag.hpp"
+#include "utils/tracked.hpp"
+#include "utils/batch.hpp"
+
 #include "preprocess.hpp"
 
 
@@ -25,6 +28,9 @@ public:
 	typedef Instance::idx_t idx_t;
 	typedef Preprocess::idx_pr idx_pr;
 
+	Batch<idx_t, int8_t> op_change;
+	Batch<idx_pr, int8_t> op_succ_change;
+	Batch<idx_pr, int8_t> links_change;
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 
@@ -32,6 +38,8 @@ public:
 
 	Link_graph(const Preprocess& prepr);
 	~Link_graph();
+
+	void sync();
 
 	void print_chains(bool force=false);
 	
@@ -41,27 +49,21 @@ public:
 	template<Chain_dir chain_dir, Force_opt force=FRC_NONE>
 	void get_chain(std::set<idx_pr>& chain, const idx_pr& chunks);
 
+private:
+	std::vector<Link> chunk_links = {};
+	std::vector<idx_pr> links_hlpr = {};
+
+	void update_link(const Batch<idx_pr, int8_t>::Item& change);
+	
+	void make_chunks();
+	void make_links();
+
 	template<Chain_dir chain_dir, Force_opt force=FRC_NONE>
 	void extend_chain(std::set<idx_pr>& chain, const idx_pr& chunks);
 	
 	template<Chain_dir chain_dir, Force_opt force=FRC_NONE,
 		Link_dir first_dir, Link_dir second_dir>
 	void extend_chain_in_dir(std::set<idx_pr>& chain, const idx_pr& chunks);
-
-	Flag chunk_changed;
-
-	void add_links_batch(const std::vector<idx_pr>& links);
-	void change_links_batch(std::vector<Lnk_chg>& batch);
-	void change_link(const Lnk_chg& change);
-
-private:
-
-	std::vector<Link> chunk_links = {};
-
-	void make_chunks();
-	void make_links();
-
-	
 };
 
 // size_t link_chunk_size = sizeof(Link_graph::Chunk);
@@ -70,11 +72,11 @@ struct Link_graph::Link
 {
 	idx_t res = IDX_MAX;
 	idx_t chunk = IDX_MAX;
-	int8_t count = 0;
+	Tracked<int8_t> count = 0;
 
 	inline bool operator<(idx_t x) const { return chunk < x; }
 	inline bool operator==(idx_t x) const { return chunk == x ; }
-	inline bool active() const { return count > 0; }
+	inline bool active() const { return count.curr > 0; }
 };
 
 
@@ -83,13 +85,4 @@ struct Link_graph::Chunk
 	Array<Link> bkw;
 	Array<Link> fwd;
 	const Preprocess::Chunk* prepr = nullptr;
-};
-
-struct Link_graph::Lnk_chg
-{
-	idx_pr chunk = {IDX_MAX, IDX_MAX};
-	int8_t count = 0;
-
-	inline bool operator<(const Lnk_chg& x) const { return chunk < x.chunk; }
-	inline bool operator==(const Lnk_chg& x) const { return chunk == x.chunk; }
 };
