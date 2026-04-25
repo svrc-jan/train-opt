@@ -13,8 +13,9 @@ class Route_planner
 {
 public:
 	struct Op;
+	struct Level;
 	struct Route;
-
+	
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
@@ -22,7 +23,6 @@ public:
 	typedef Event_graph::edg_t edg_t; 
 	typedef Event_graph::vtx_t vtx_t; 
 	typedef Event_graph::Edge Edge;
-	typedef Event_graph::Ordering Ordering;
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
@@ -34,16 +34,20 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
+	Tracked<Flag> op_active;
+	Flag op_dirty;
+	std::vector<Tracked<idx_t>> op_succ = {};
+	std::vector<Level> levels = {};
+
+
 	Route_planner(Solver& sovler);
 	~Route_planner();
 
 	void init_data();
-	
-	void sync_route_to_op();
-	void sync_op_to_route();
+	void sync_graph();
 
-	void sync_event_graph();
-	void make_init_routes(); 
+	void get_random_ops();
+	void snap_ops();
 
 private:
 	struct Flow_cons;
@@ -53,17 +57,11 @@ private:
 
 	double init_dur_stretch = 0.5;
 
-	std::vector<Op> ops = {};
 	std::vector<Route> routes = {};
-
 	std::vector<GRBConstr> flow_constr = {};
-
 	std::set<idx_t> assign_random_route_set = {};
 
-	void plan_section_range(const Interval<idx_t>& section_ivl);
-
-	void make_plan_routes(const Interval<idx_t>& section_ivl);
-	void make_plan_chunks();
+	std::vector<double> chunk_price = {};
 
 	void init_ops();
 	void init_routes();
@@ -78,26 +76,28 @@ private:
 	void freeze_all();
 	void unfreeze_all();
 
-	void freeze_section(const Preprocess::Section& sect);
-	void unfreeze_section(const Preprocess::Section& sect);
-
-	void assign_all_random_sections();
-	void assign_random_section(const Preprocess::Section& sect);
-
-	void assign_all_sections_dur(double stretch=1.0);
-	void assign_section_dur(const Preprocess::Section& sect, double stretch=0.0);
-	void assign_op_dur(Op& op, dur_t new_dur);
+	void freeze_train(idx_t t);
+	void unfreeze_train(idx_t t);
 };
 
 
 struct Route_planner::Op
 {
-	Tracked<int8_t> value = {0};
 	Tracked<idx_t> succ = {IDX_MAX};
-
-	uint8_t in_graph = 0;
-	Tracked<tim_t> dur = {0};
 	const Preprocess::Op* prepr = nullptr;
+};
+
+
+
+struct Route_planner::Level
+{
+	idx_t idx = IDX_MAX;
+	Tracked<idx_t> next = {IDX_MAX};
+	Tracked<dur_t> dur = {0};
+	Tracked<tim_t> lb = {IDX_MAX};
+
+	Edge edge_old() const { return {{idx, next.old}, dur.old, EDG_MAX}; }
+	Edge edge_curr() const { return {{idx, next.curr}, dur.curr, EDG_MAX}; }
 };
 
 

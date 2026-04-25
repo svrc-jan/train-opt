@@ -23,7 +23,7 @@ public:
 
 	struct Junct_edge;
 	struct Level_edge;
-	struct Chunk_state;
+	struct State;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
@@ -211,13 +211,13 @@ struct Preprocess::Section
 };
 
 
-struct Preprocess::Chunk_state
+struct Preprocess::State
 {
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
-	dur_t rel_time = 0;
+	dur_t dur = 0;
 
-	inline bool operator==(const Chunk_state& x) const 
-	{ return (level == x.level) && (rel_time == x.rel_time); }
+	inline bool operator==(const State& x) const 
+	{ return (level == x.level) && (dur == x.dur); }
 };
 
 
@@ -226,7 +226,7 @@ struct Preprocess::Chunk
 	idx_t idx = IDX_MAX;
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
-	Chunk_state state;
+	State state;
 	Array<idx_t> ops;
 
 	bool operator<(idx_t x) const { return idx < x; }

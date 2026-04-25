@@ -50,9 +50,23 @@ void Flag::fill(const bool value)
 }
 
 
+bool Flag::equal(const Flag& other)
+{
+	size_t min_size = MIN(this->req_size(), other.req_size());
+	for (size_t i = 0; i < min_size; i++) {
+		if (this->data[i] |= other.data[i]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
 void Flag::set(const Flag& other)
 {
 	size_t size = other.req_size();
+
 	this->alloc_data(size);
 
 	for (size_t i = 0; i < size; i++) {
@@ -83,6 +97,15 @@ void Flag::mask(const Flag& other)
 	size_t min_size = MIN(this->req_size(), other.req_size());
 	for (size_t i = 0; i < min_size; i++) {
 		this->data[i] &= other.data[i];
+	}
+}
+
+
+void Flag::diff(const Flag& other)
+{
+	size_t min_size = MIN(this->req_size(), other.req_size());
+	for (size_t i = 0; i < min_size; i++) {
+		this->data[i] ^= other.data[i];
 	}
 }
 
@@ -129,6 +152,10 @@ void Flag::alloc_data(const size_t new_size)
 
 	if (this->data == nullptr) {
 		abort();
+	}
+
+	for (size_t i = this->capacity; i < new_size; i++) {
+		this->data[i] = 0;
 	}
 
 	this->capacity = new_size;

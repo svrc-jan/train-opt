@@ -35,21 +35,24 @@ int main(int argc, char const *argv[])
 		Preprocess prepr(inst, true);
 		Link_graph link_graph(prepr);
 
+		Batch<Link_graph::idx_t, int8_t> op_batch;
+		Batch<Link_graph::idx_pr, int8_t> op_succ_batch;
+
 		for (auto& train : inst.trains) {
 			auto o = train.op_first;
 			while (true) {
 				auto& op = inst.ops[o];
-				link_graph.op_change += o;
+				op_batch += o;
 
 				if (op.n_succ() == 0) { break ; }
 				auto s = op.succ.get_random_item();
 				
-				link_graph.op_succ_change += {o, s};
+				op_succ_batch += {o, s};
 				o = s;
 			}
 		}
 
-		link_graph.sync();
+		link_graph.sync(op_batch, op_succ_batch);
 		link_graph.print_chains(false);
 	}
 

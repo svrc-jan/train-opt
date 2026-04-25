@@ -1,11 +1,13 @@
 #pragma once
 
-#include <vector>
 #include <cstdint>
+#include <vector>
+#include <set>
 #include <queue>
 #include <limits>
 #include <ranges>
 
+#include "utils/tracked.hpp"
 #include "utils/macros.hpp"
 #include "utils/interval.hpp"
 #include "utils/flag.hpp"
@@ -24,7 +26,6 @@ public:
 	};
 
 	struct Edge;
-	struct Ordering;
 	struct Vertex_edge;
 
 	typedef uint16_t edg_t;
@@ -37,6 +38,7 @@ public:
 	static constexpr dur_t DUR_MAX = std::numeric_limits<dur_t>::max();
 	static constexpr tim_t TIM_MAX = std::numeric_limits<tim_t>::max();
 
+
 	std::vector<tim_t> time = {};
 	std::vector<vtx_t> cycle_found_vtx = {};
 	
@@ -48,17 +50,10 @@ public:
 	bool set_time_lb(vtx_t v, tim_t lb);
 
 	void add_edge(const Edge& e);
-	bool remove_edge(const Edge& e);
-	bool update_edge(const Edge& e_old, const Edge& e_new);
-	bool update_edge_same_vtx(const Edge& e_old, const Edge& e_new);
+	void remove_edge(const Edge& e);
+	void update_edge(const Edge& e_old, const Edge& e_new);
 
-	void add_edges(const std::vector<Edge>& edges);
 	void clear_edges();
-
-	void remove_last_edges(const std::vector<Edge>& edges);
-	void remove_last_edges_small(const std::vector<Edge>& edges);
-
-	void set_all_edge_idx(edg_t idx);
 
 	Sync_state sync(Flag& time_change);
 
@@ -67,6 +62,7 @@ public:
 	
 private:
 	struct Edge_entry;
+	struct Entry_update;
 	
 	vtx_t n_vtx = 0;
 	std::vector<std::vector<Edge_entry>> edges_out = {};
@@ -88,10 +84,17 @@ private:
 
 	std::queue<vtx_t> queue_;
 
-	bool update_dfs(vtx_t v);
-	void update_cycle_paths();
-	bool update_time_clear(vtx_t v, Flag& time_change);
+	void Event_graph::add_in_entry(const Edge& x);
+	void Event_graph::add_out_entry(const Edge& x);
 
+	void Event_graph::remove_in_entry(const Edge& x);
+	void Event_graph::remove_out_entry(const Edge& x);
+
+	void Event_graph::update_in_entry(const Edge& x_old, const Edge& x_new);
+	void Event_graph::update_out_entry(const Edge& x_old, const Edge& x_new);
+
+	bool sync_dfs(vtx_t v);
+	bool sync_time_clear(vtx_t v, Flag& time_change);
 
 	Edge_entry* find_entry(std::vector<Edge_entry>& list, const Edge_entry& entry);
 };
@@ -103,8 +106,11 @@ struct Event_graph::Edge_entry
 	dur_t d = 0;
 	edg_t e = EDG_MAX;
 
+	inline bool operator<(const Edge_entry& x) const 
+	{ return LEX_LT3(v, d, e, x.v, x.d, x.e); }
+
 	bool operator==(const Edge_entry& x) const
-	{ return (v == x.v) && (d == x.d) && (e == x.e); }
+	{ return LEX_EQ3(v, d, e, x.v, x.d, x.e); }
 };
 
 
@@ -115,10 +121,10 @@ struct Event_graph::Edge
 	edg_t e = EDG_MAX;
 
 	inline bool operator<(const Edge& x) const 
-	{ return LEX_LT3(v.start, v.end, d, x.v.start, x.v.end, x.d); }
+	{ return LEX_LT3(v, d, e, x.v, x.d, x.e); }
 
 	inline bool operator==(const Edge& x) const
-	{ return (v == x.v) && (d == x.d) && (e == x.e); }
+	{ return LEX_EQ3(v, d, e, x.v, x.d, x.e); }
 
 	inline bool operator!=(const Edge& x) const
 	{ return !(*this == x); }
@@ -137,21 +143,4 @@ struct Event_graph::Vertex_edge
 	Vertex_edge() : v(VTX_MAX), e(EDG_MAX) {}
 	Vertex_edge(vtx_t v, edg_t e) : v(v), e(e) {}
 	Vertex_edge(const Edge_entry& x) : v(x.v), e(x.e) {}
-};
-
-
-struct Event_graph::Ordering
-{
-	vtx_t from = VTX_MAX;
-	vtx_t to = VTX_MAX;
-	dur_t dur = 0;
-
-	Edge to_edge(edg_t idx=EDG_MAX) const
-	{ return Edge({from, to}, dur, idx); }
-
-	inline bool operator==(const Ordering& x) const
-	{ return (from == x.from) && (to == x.to) && (dur == x.dur); }
-
-	inline bool operator!=(const Ordering& x) const
-	{ return !(*this == x); }
 };

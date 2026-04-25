@@ -39,7 +39,7 @@ public:
 	Link_graph(const Preprocess& prepr);
 	~Link_graph();
 
-	void sync();
+	void sync(const Batch<idx_t, int8_t>& op_change, Batch<idx_pr, int8_t> const op_succ_change);
 
 	void print_chains(bool force=false);
 	

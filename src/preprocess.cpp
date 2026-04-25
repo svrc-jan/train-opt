@@ -840,7 +840,7 @@ void Preprocess::make_resource_chunks()
 
 			chunk.state.level.start = MAX(chunk.state.level.start, op.level.start);
 			chunk.state.level.end = MIN(chunk.state.level.end, op.level.end);
-			chunk.state.rel_time = MIN(chunk.state.rel_time, res->dur);
+			chunk.state.dur = MIN(chunk.state.dur, res->dur);
 		}
 	}
 

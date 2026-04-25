@@ -55,96 +55,120 @@ void Event_graph::add_edge(const Edge& x)
 	assert(x.is_valid());
 	assert(x.v.start != x.v.end);
 
-	auto in_entry = x.to_in();
-	auto out_entry = x.to_out();
-
-	assert(x.v.end != in_entry.v);
-	assert(x.v.start != out_entry.v);
-
-	this->edges_in[x.v.end].push_back(in_entry);
-	this->edges_out[x.v.start].push_back(out_entry);
+	this->add_in_entry(x);
+	this->add_out_entry(x);
 
 	this->vtx_dirty += x.v.end;
 	this->need_sync = true;
 }
 
 
-bool Event_graph::remove_edge(const Edge& x)
+void Event_graph::remove_edge(const Edge& x)
 {
 	assert(x.is_valid());
-
-	auto& edg_in = this->edges_in[x.v.end];
-	auto in_entry = this->find_entry(edg_in, x.to_in());
 	
-	auto& edg_out = this->edges_out[x.v.start];
-	auto out_entry = this->find_entry(edg_out, x.to_out());
-
-	if ((in_entry == nullptr) || (out_entry == nullptr)) {
-		assert((in_entry == nullptr) && (out_entry == nullptr));
-		return false;
-	}
-
-	*in_entry = edg_in.back();
-	edg_in.pop_back();
-
-	*out_entry = edg_out.back();
-	edg_out.pop_back();
+	this->remove_in_entry(x);
+	this->remove_out_entry(x);
 
 	this->vtx_dirty += x.v.end;
 	this->need_sync = true;
-
-	return true;
-}
-
-bool Event_graph::update_edge(const Edge& e_old, const Edge& e_new)
-{
-	if (e_old == e_new) {
-		return true;
-	}
-
-	bool ret = true;
-	if (e_old.v == e_new.v) {
-		if (!e_old.is_valid()) {
-			return true;
-		}
-		ret = this->update_edge_same_vtx(e_old, e_new);
-		return ret;
-	}
-	
-	if (e_old.is_valid()) {
-		ret = this->remove_edge(e_old);
-	}
-
-	if (e_new.is_valid()) {
-		this->add_edge(e_new);
-	}
-
-	return ret;
 }
 
 
-bool Event_graph::update_edge_same_vtx(const Edge& e_old, const Edge& e_new)
+void Event_graph::update_edge(const Edge& x_old, const Edge& x_new)
 {
-	assert(e_old.v == e_new.v && e_old.is_valid() && e_new.is_valid());
-
-	auto& edg_in = this->edges_in[e_old.v.end];
-	auto in_entry = this->find_entry(edg_in, e_old.to_in());
+	if (x_old == x_new) {
+		return;
+	}
 	
-	auto& edg_out = this->edges_out[e_old.v.start];
-	auto out_entry = this->find_entry(edg_out, e_old.to_out());
-
-	if ((in_entry == nullptr) || (out_entry == nullptr)) {
-		assert((in_entry == nullptr) && (out_entry == nullptr));
-		return false;
+	if (!x_old.is_valid()) {
+		this->add_edge(x_new);
+		return;
 	}
 
-	*in_entry = e_new.to_in();
-	*out_entry = e_new.to_out();
+	if (!x_new.is_valid()) {
+		this->remove_edge(x_old);
+		return;
+	}
 
-	this->vtx_dirty += e_new.v.end;
-	this->need_sync = true;
+	if (x_old.v.end == x_new.v.end) {
+		this->update_in_entry(x_old, x_new);
+	}
+	else {
+		this->remove_in_entry(x_old);
+		this->add_in_entry(x_new);
+	}
 
-	return true;
+	
+	if (x_old.v.start == x_new.v.start) {
+		this->update_out_entry(x_old, x_new);
+	}
+	else {
+		this->remove_in_entry(x_old);
+		this->remove_out_entry(x_new);
+	}
+}
+
+
+void Event_graph::add_in_entry(const Edge& x)
+{
+	this->edges_in[x.v.end].push_back(x.to_in());
+}
+
+
+void Event_graph::add_out_entry(const Edge& x)
+{
+	this->edges_out[x.v.start].push_back(x.to_out());
+}
+
+
+void Event_graph::remove_in_entry(const Edge& x)
+{
+	auto& edg = this->edges_in[x.v.end];
+
+	auto it = find(edg.begin(), edg.end(), x.to_in());
+	assert(it != edg.end());
+
+	*it = edg.back();
+	edg.pop_back();
+}
+
+
+void Event_graph::remove_out_entry(const Edge& x)
+{
+	auto& edg = this->edges_out[x.v.start];
+
+	auto it = find(edg.begin(), edg.end(), x.to_out());
+	assert(it != edg.end());
+
+	*it = edg.back();
+	edg.pop_back();
+}
+
+
+void Event_graph::update_in_entry(const Edge& x_old, const Edge& x_new)
+{
+	assert(x_old.v.end == x_new.v.end);
+
+	auto& edg = this->edges_in[x_old.v.end];
+
+	auto it = find(edg.begin(), edg.end(), x_old.to_in());
+	assert(it != edg.end());
+
+	*it = x_new.to_in();
+}
+
+
+void Event_graph::update_out_entry(const Edge& x_old, const Edge& x_new)
+{
+	assert(x_old.v.start == x_new.v.start);
+
+	auto& edg = this->edges_in[x_old.v.start];
+
+	auto it = find(edg.begin(), edg.end(), x_old.to_out());
+	assert(it != edg.end());
+
+	*it = x_new.to_out();
 }
 
 
@@ -163,15 +187,6 @@ Event_graph::Edge_entry* Event_graph::find_entry(
 }
 
 
-
-void Event_graph::add_edges(const vector<Edge>& edges)
-{
-	for (auto& x : edges) {
-		this->add_edge(x);
-	}
-}
-
-
 void Event_graph::clear_edges()
 {
 	for (auto& x : this->edges_in) {
@@ -183,57 +198,6 @@ void Event_graph::clear_edges()
 	}
 }
 
-
-void Event_graph::remove_last_edges(const std::vector<Edge>& edges)
-{
-	if (edges.size() == 0) {
-		return;
-	}
-
-	vtx_t in_count[this->n_vtx];
-	vtx_t out_count[this->n_vtx];
-
-	auto vtx_range = Range<vtx_t>(this->n_vtx);
-
-	for (auto v : vtx_range) {
-		in_count[v] = 0;
-		out_count[v] = 0;
-	}
-
-	for (auto& x : edges) {
-		in_count[x.v.end] += 1;
-		out_count[x.v.start] += 1;	
-	}
-
-	for (auto v : vtx_range) {
-		vtx_t cnt = in_count[v];
-		if (cnt > 0) {
-			auto& x = this->edges_in[v];
-			x.resize(x.size() - cnt);
-			this->vtx_dirty += v;
-		}
-
-		cnt = out_count[v];
-		if (cnt > 0) {
-			auto& x = this->edges_out[v];
-			x.resize(x.size() - cnt);
-			this->vtx_dirty += v;
-		}
-	}
-
-	this->need_sync = true;
-}
-
-void Event_graph::remove_last_edges_small(const std::vector<Edge>& edges)
-{
-	for (auto& x : edges) {
-		this->edges_in[x.v.end].pop_back();
-		this->edges_out[x.v.start].pop_back();
-
-		this->vtx_dirty += x.v.start;
-		this->vtx_dirty += x.v.end;
-	}
-}
 
 Event_graph::Sync_state Event_graph::sync(Flag& time_change)
 {
@@ -252,13 +216,13 @@ Event_graph::Sync_state Event_graph::sync(Flag& time_change)
 	this->rec_stack.clear();
 	this->update_stack.clear();
 
-	// for (vtx_t v : this->need_list) {
-	// 	this->update_dfs(v);
-	// }
-
-	for (vtx_t v = 0; v < this->n_vtx; v++) {
-		this->update_dfs(v);
+	for (vtx_t v : this->need_list) {
+		this->sync_dfs(v);
 	}
+
+	// for (vtx_t v = 0; v < this->n_vtx; v++) {
+	// 	this->sync_dfs(v);
+	// }
 
 	if (this->cycle_found_vtx.size() > 0) {
 		return CYCLE_FOUND;
@@ -267,7 +231,7 @@ Event_graph::Sync_state Event_graph::sync(Flag& time_change)
 
 	bool time_changed = false;
 	for (vtx_t v : this->update_stack | views::reverse) {
-		if (this->update_time_clear(v, time_change)) {
+		if (this->sync_time_clear(v, time_change)) {
 			time_changed = true;
 		};
 	}
@@ -277,7 +241,7 @@ Event_graph::Sync_state Event_graph::sync(Flag& time_change)
 }
 
 
-bool Event_graph::update_dfs(vtx_t v)
+bool Event_graph::sync_dfs(vtx_t v)
 {
 	if (this->rec_stack[v]) {
 		this->cycle_found_vtx.push_back(v);
@@ -292,7 +256,7 @@ bool Event_graph::update_dfs(vtx_t v)
 	this->rec_stack += v;
 
 	for (const auto& x : this->edges_out[v]) {
-		bool ret = update_dfs(x.v);
+		bool ret = sync_dfs(x.v);
 		if (!ret) {
 			this->rec_stack -= v;
 			return false;
@@ -306,7 +270,7 @@ bool Event_graph::update_dfs(vtx_t v)
 }
 
 
-bool Event_graph::update_time_clear(vtx_t v, Flag& time_change)
+bool Event_graph::sync_time_clear(vtx_t v, Flag& time_change)
 {
 	assert(this->visited[v]);
 

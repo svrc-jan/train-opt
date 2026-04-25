@@ -25,6 +25,9 @@ public:
 	inline auto begin() { return this->data.begin(); }
 	inline auto end() { return this->data.end(); }
 
+	inline auto begin() const { return this->data.cbegin(); }
+	inline auto end() const { return this->data.cend(); }
+
 	inline Batch<I, C>& operator<<(const Item& x) { this->push_back(x); return *this; }
 	inline Batch<I, C>& operator+=(const I& x) { this->push_back({x, 1}); return *this; }
 	inline Batch<I, C>& operator-=(const I& x) { this->push_back({x, -1}); return *this; }

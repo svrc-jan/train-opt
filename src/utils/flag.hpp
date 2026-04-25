@@ -42,11 +42,23 @@ public:
 	inline bool operator[](size_t idx) const { return this->get(idx); }
 	inline void operator+=(size_t idx) { this->set_true(idx); }
 	inline void operator-=(size_t idx) { this->set_false(idx); }
+	inline void operator=(bool value) { this->fill(value); }
 	
+	bool equal(const Flag& other);
 	void set(const Flag& other);
 	void set_true(const Flag& other);
 	void set_false(const Flag& other);
 	void mask(const Flag& other);
+	void diff(const Flag& other);
+	
+	inline void operator==(const Flag& other) { this->equal(other); }
+	inline void operator=(const Flag& other) { this->set(other); }
+	inline void operator+=(const Flag& other) { this->set_true(other); }
+	inline void operator-=(const Flag& other) { this->set_false(other); }
+	inline void operator*=(const Flag& other) { this->mask(other); }
+	inline void operator^=(const Flag& other) { this->diff(other); }
+	
+	
 
 	Iter begin() const { return Iter(*this); }
 	size_t end() const { return this->n_items; }
@@ -72,13 +84,12 @@ private:
 };
 
 
-template<typename T, bool check_count>
+template<typename T, bool check_empty>
 void Flag::get_true_list(T& ret) const
 {
 	ret.clear();
-	if constexpr (check_count) {
-		size_t true_count = this->get_true_count();
-		if (true_count == 0) {
+	if constexpr (check_empty) {
+		if (this->empty()) {
 			return;
 		}
 	}

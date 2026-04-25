@@ -26,27 +26,23 @@ Link_graph::~Link_graph()
 }
 
 
-void Link_graph::sync()
+void Link_graph::sync(const Batch<idx_t, int8_t>& op_change, const Batch<idx_pr, int8_t> op_succ_change)
 {
 	this->links_change.clear();
 
-	this->op_change.aggregate();
 	for (auto o : op_change) {
 		this->prepr.get_op_links(this->links_hlpr, o.idx);
 		for (auto x : this->links_hlpr) {
 			this->links_change.push_back({x, o.count});
 		}
 	}
-	this->op_change.clear();
 
-	this->op_succ_change.aggregate();
-	for (auto& o : op_succ_change) {
-		this->prepr.get_op_succ_links(this->links_hlpr, o.idx);
+	for (auto& o_s : op_succ_change) {
+		this->prepr.get_op_succ_links(this->links_hlpr, o_s.idx);
 		for (auto x : this->links_hlpr) {
-			this->links_change.push_back({x, o.count});
+			this->links_change.push_back({x, o_s.count});
 		}
 	}
-	this->op_succ_change.clear();
 
 	this->links_change.aggregate();
 	for (auto& x : this->links_change) {
