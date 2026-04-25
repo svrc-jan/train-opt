@@ -35,21 +35,24 @@ int main(int argc, char const *argv[])
 		Preprocess prepr(inst, true);
 		Link_graph link_graph(prepr);
 
+		vector<Preprocess::idx_pr> links = {};
+
 		for (auto& train : inst.trains) {
 			auto o = train.op_first;
 			while (true) {
 				auto& op = inst.ops[o];
-
+				prepr.get_op_links(links, o);
+			
 				if (op.n_succ() == 0) { break ; }
 				auto s = op.succ.get_random_item();
-
-				link_graph.set_op_succ(o, s);
+				
+				prepr.get_op_succ_links(links, o, s);
 				o = s;
 			}
-			
 		}
 
-		link_graph.print_chains();
+		link_graph.add_links_batch(links);
+		link_graph.print_chains(false);
 	}
 
 	return 0;

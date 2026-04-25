@@ -1001,7 +1001,7 @@ bool Preprocess::ops_reachable(const std::vector<idx_t>& vec_from, const std::ve
 }
 
 
-void Preprocess::get_link_set(set<idx_t>& link_set, const Chunk& chunk) const
+void Preprocess::get_chunk_link_set(set<idx_t>& link_set, const Chunk& chunk) const
 {
 	link_set.clear();
 	for (auto o : chunk.ops) {
@@ -1020,6 +1020,34 @@ void Preprocess::get_link_set(set<idx_t>& link_set, const Chunk& chunk) const
 				assert(this->chunks[x].res != chunk.res);
 				link_set.insert(x);
 			}
+		}
+	}
+}
+
+
+void Preprocess::get_op_links(vector<idx_pr>& links, idx_t o) const
+{
+	auto& op_chunks = this->ops[o].chunks;
+	for (auto c1 : op_chunks) {
+		for (auto c2 : op_chunks) {
+			if (c1 == c2) { continue; }
+
+			links.push_back({c1, c2});
+		}
+	}
+	
+}
+
+
+void Preprocess::get_op_succ_links(vector<idx_pr>& links, idx_t o, idx_t s) const
+{
+	auto& op_chunks = this->ops[o].chunks;
+	auto& succ_chunks = this->ops[s].chunks;
+	for (auto c1 : op_chunks) {
+		for (auto c2 : succ_chunks) {
+			if (c1 == c2) { continue; }
+
+			links.push_back({c1, c2});
 		}
 	}
 }

@@ -28,6 +28,7 @@ Link_graph::~Link_graph()
 void Link_graph::make_chunks()
 {
 	this->chunks.resize(this->prepr.n_chunks());
+	this->chunk_changed.set_n_items(this->prepr.n_chunks());
 
 	for (auto c : this->prepr.chunks_range()) {
 		auto& chunk = this->chunks[c];
@@ -42,21 +43,23 @@ void Link_graph::make_links()
 	set<idx_t> link_set;
 
 	size_t link_idx = 0;
+	vector<idx_pr> link_pairs = {};
+
 	for (auto& chunk : this->chunks) {
-		this->prepr.get_link_set(link_set, *chunk.prepr);
+		this->prepr.get_chunk_link_set(link_set, *chunk.prepr);
 		
 		chunk.fwd.set_size(link_set.size());
-		link_idx += link_set.size();
 
-		idx_t prev_r = IDX_MAX;
 		for (auto x : link_set) {
-			idx_t r = this->prepr.chunks[x].res;
-			assert(prev_r <= r || prev_r == IDX_MAX);
-		
-			this->chunk_links.push_back({r, x});
+			assert(x != chunk.prepr->idx);
+
+			idx_t rx = this->prepr.chunks[x].res;
+			assert(rx != chunk.prepr->res);
+
+			link_pairs.push_back({chunk.prepr->idx, x});
 			this->chunks[x].bkw.increment_size(1);
 
-			prev_r = r;
+			link_idx += 1;
 		}
 	}
 
@@ -64,134 +67,234 @@ void Link_graph::make_links()
 
 	link_idx = 0;
 	for (auto& chunk : this->chunks) {
-		chunk.fwd.assign_offset(this->chunk_links, link_idx, false);
-	}
-
-	for (auto& chunk : this->chunks) {
 		chunk.bkw.assign_offset(this->chunk_links, link_idx, true);
+		chunk.fwd.assign_offset(this->chunk_links, link_idx, true);
 	}
 
 	assert(link_idx == this->chunk_links.size());
 
-	for (auto& chunk : this->chunks) {
-		idx_t r = chunk.prepr->res;
+	link_idx = 0;
+	for (auto x : link_pairs) {
+		auto& chunk_first = this->chunks[x.first];
+		auto& chunk_second = this->chunks[x.second];
 
-		for (auto& lnk : chunk.fwd) {
-			this->chunks[lnk.chunk].bkw.push_back({r, chunk.prepr->idx});
-		}
+		chunk_second.bkw.push_back({chunk_first.prepr->res, x.first, 0});
+		chunk_first.fwd.push_back({chunk_second.prepr->res, x.second, 0});
+		
+		link_idx += 1;
 	}
+	assert(2*link_idx == this->chunk_links.size());
 }
 
 
 void Link_graph::print_chains(bool force)
 {
-	Flag chunk_done(this->prepr.n_chunks());
+	Flag par_done(this->prepr.n_chunks());
+	Flag opp_done(this->prepr.n_chunks());
 
-	pair<idx_t, idx_t> curr;
-	set<pair<idx_t, idx_t>> chain;
+	idx_pr curr;
+	set<idx_pr> chain;
+
+	vector<idx_t> par_lengths = {};
+	vector<idx_t> opp_lengths = {};
 
 	for (auto& train1 : this->prepr.trains) {
 		for (idx_t t2 = train1.idx + 1; t2 < this->inst.n_trains(); t2++) {
 			auto& train2 = this->prepr.trains[t2];
 
-			chunk_done.clear();
+			par_done.clear();
+			opp_done.clear();
 
-			bool start_printed = false;
+			par_lengths.clear();
+			opp_lengths.clear();
 
 			for (auto r : this->inst.res_range()) {
 				for (auto& chunk1 : train1.chunks[r]) {
-					if (chunk_done[chunk1.idx]) { continue; }
-
 					for (auto& chunk2 : train2.chunks[r]) {
-						if (chunk_done[chunk2.idx]) { continue; }
-
-						chain.clear();
-
-						pair<idx_t, idx_t> x = {chunk1.idx, chunk2.idx};
-						chain.insert(x);
-						this->extend_chain(chain, x, {force, force});
-
-						for (auto k : chain) {
-							chunk_done += k.first;
-							chunk_done += k.second;
+						size_t length = 0;
+						
+						if (force) {
+							length = this->get_chain_length<PARALLEL, FRC_BOTH>(
+								{chunk1.idx, chunk2.idx}, chain, par_done);
+						}
+						else {
+							length = this->get_chain_length<PARALLEL, FRC_NONE>(
+								{chunk1.idx, chunk2.idx}, chain, par_done);
 						}
 
-						if (chain.size() > 1) {
-							if (!start_printed) {
-								cout << endl << train1.idx << " / " << t2 << " chain lengths:";
-								start_printed = true;
-							}
-							cout << " " << chain.size();
+						if (length > 1) {
+							par_lengths.push_back(length);
+						}
+
+						if (force) {
+							length = this->get_chain_length<OPPOSITE, FRC_BOTH>(
+								{chunk1.idx, chunk2.idx}, chain, opp_done);
+						}
+						else {
+							length = this->get_chain_length<OPPOSITE, FRC_NONE>(
+								{chunk1.idx, chunk2.idx}, chain, opp_done);
+						}
+
+						if (length > 1) {
+							opp_lengths.push_back(length);
 						}
 					}
 				}
 			}
-		}
-	}
 
-	cout << endl;
-}
+			if (par_lengths.empty() && opp_lengths.empty()) { continue; }
 
+			cout << train1.idx << " : " << train2.idx;
 
-void Link_graph::extend_chain(set<pair<idx_t, idx_t>>& chain, 
-	const pair<idx_t, idx_t>& curr, const pair<uint8_t, uint8_t>& force)
-{
-	auto& chunk_first = this->chunks[curr.first];
-	auto& chunk_second = this->chunks[curr.second];
-
-	for (auto& lnk_first : chunk_first.fwd) {
-		if (!lnk_first.active && !force.first) { continue; }
-
-		for (auto& lnk_second : chunk_second.bkw) {
-			if (!lnk_second.active && !force.second) { continue; }
-
-			if (lnk_first.res != lnk_second.res) { continue; }
-
-			pair<idx_t, idx_t> x = {lnk_first.chunk, lnk_second.chunk};
-			auto ret = chain.insert(x);
-			
-			if (ret.second) {
-				this->extend_chain(chain, x, force);
+			if (!par_lengths.empty()) {
+				cout << ", par: " << par_lengths; 
 			}
-		}
-	}
-
-	for (auto& lnk_first : chunk_first.bkw) {
-		if (!lnk_first.active && !force.first) { continue; }
-		
-		for (auto& lnk_second : chunk_second.fwd) {
-			if (!lnk_second.active && !force.second) { continue; }
-
-			if (lnk_first.res != lnk_second.res) { continue; }
-
-			pair<idx_t, idx_t> x = {lnk_first.chunk, lnk_second.chunk};
-			auto ret = chain.insert(x);
 			
-			if (ret.second) {
-				this->extend_chain(chain, x, force);
+			if (!opp_lengths.empty()) {
+				cout << ", opp: " << opp_lengths; 
 			}
+
+			cout << endl;
 		}
 	}
 }
 
-
-void Link_graph::set_op_succ(idx_t o, idx_t s)
+template<Link_graph::Chain_dir chain_dir, Link_graph::Force_opt force>
+size_t Link_graph::get_chain_length(idx_pr chunks,	set<idx_pr>& chain,	Flag& done)
 {
-	for (auto c_o : this->prepr.ops[o].chunks) {
-		auto chunk_o = this->chunks[c_o];
+	if (done[chunks.first] || done[chunks.second]) {
+		return 0;
+	}
 
-		for (auto c_s : this->prepr.ops[s].chunks) {
-			auto chunk_s = this->chunks[c_s];
+	this->get_chain<chain_dir, force>(chain, chunks);
+	for (auto x : chain) {
+		done += x.first;
+		done += x.second;
+	}
 
-			if (c_o == c_s) { continue; }
+	return chain.size();
+}
 
-			auto lnk_o = chunk_o.fwd.find_asc(c_s);
-			auto lnk_s = chunk_s.bkw.find_asc(c_o);
+template<Link_graph::Chain_dir chain_dir, Link_graph::Force_opt force>
+void Link_graph::get_chain(std::set<idx_pr>& chain, const idx_pr& chunks)
+{
+	chain.clear();
+	chain.insert(chunks);
+	this->extend_chain<chain_dir, force>(chain, chunks);
+}
 
-			assert(lnk_o != nullptr && lnk_s != nullptr);
+
+template<Link_graph::Chain_dir chain_dir, Link_graph::Force_opt force>
+void Link_graph::extend_chain(set<idx_pr>& chain, const idx_pr& curr_chunks)
+{
+	if constexpr (chain_dir == PARALLEL || chain_dir == EITHER) {
+		this->extend_chain_in_dir<chain_dir, force, FORWARD, FORWARD>(chain, curr_chunks);
+		this->extend_chain_in_dir<chain_dir, force, BACKWARD, BACKWARD>(chain, curr_chunks);
+	}
+
+	if constexpr (chain_dir == OPPOSITE || chain_dir == EITHER) {
+		this->extend_chain_in_dir<chain_dir, force, FORWARD, BACKWARD>(chain, curr_chunks);
+		this->extend_chain_in_dir<chain_dir, force, BACKWARD, FORWARD>(chain, curr_chunks);
+	}
+}
+
+
+template<Link_graph::Chain_dir chain_dir, Link_graph::Force_opt force, 
+	Link_graph::Link_dir first_dir, Link_graph::Link_dir second_dir>
+void Link_graph::extend_chain_in_dir(set<idx_pr>& chain, const idx_pr& curr_chunks)
+{
+	Array<Link>* links_first = nullptr;
+	Array<Link>* links_second = nullptr;
+
+	if constexpr (first_dir == FORWARD) {
+		links_first = &this->chunks[curr_chunks.first].fwd;
+	}
+	else {
+		links_first = &this->chunks[curr_chunks.first].bkw;
+	}
+
+	if constexpr (second_dir == FORWARD) {
+		links_second = &this->chunks[curr_chunks.second].fwd;
+	}
+	else {
+		links_second = &this->chunks[curr_chunks.second].bkw;
+	}
+
+	for (auto& lnk_first : *links_first) {
+		if constexpr (force == FRC_NONE || force == FRC_SECOND) {
+			if (!lnk_first.active()) { continue; }
+		}
+
+		for (auto& lnk_second : *links_second) {
+			if constexpr (force == FRC_NONE || force == FRC_FIRST) {
+				if (!lnk_second.active()) { continue; }
+			}
+
+			if (lnk_first.res != lnk_second.res) { continue; }
+
+			idx_pr x = {lnk_first.chunk, lnk_second.chunk};
+			auto ret = chain.insert(x);
 			
-			lnk_o->active = true;
-			lnk_s->active = true;
+			if (ret.second) {
+				this->extend_chain<chain_dir, force>(chain, x);
+			}
 		}
 	}
+}
+
+
+void Link_graph::add_links_batch(const vector<idx_pr>& links)
+{
+	vector<Lnk_chg> batch;
+	batch.reserve(links.size());
+
+	for (auto& x : links) {
+		batch.push_back({x, 1});
+	}
+
+	this->change_links_batch(batch);
+}
+
+void Link_graph::change_links_batch(std::vector<Lnk_chg>& batch)
+{
+	sort(batch.begin(), batch.end());
+
+	size_t i = 0;
+
+	for (size_t j = 1; j < batch.size(); j++) {
+		if (batch[i].chunk == batch[j].chunk) {
+			batch[i].count += batch[j].count;
+			batch[j].count = 0;
+		}
+		else {
+			i = j;
+		}
+	}
+
+	for (auto& x : batch) {
+		this->change_link(x);
+	}
+}
+
+void Link_graph::change_link(const Lnk_chg& change)
+{
+	if (change.count == 0) {
+		return;
+	}
+
+	idx_t c1 = change.chunk.first;
+	idx_t c2 = change.chunk.second;
+
+	auto lnk_fwd = this->chunks[c1].fwd.find_asc(c2);
+	auto lnk_bkw = this->chunks[c2].bkw.find_asc(c1);
+
+	assert(lnk_fwd != nullptr && lnk_bkw != nullptr);
+ 
+	lnk_fwd->count += change.count;
+	lnk_bkw->count += change.count;
+
+	assert(lnk_fwd->count >= 0 && lnk_bkw->count >= 0);
+
+	this->chunk_changed += c1;
+	this->chunk_changed += c2;
 }

@@ -29,6 +29,7 @@ public:
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
 	typedef uint16_t cnt_t;
+	typedef std::pair<idx_t, idx_t> idx_pr;
 
 	typedef Instance::Idx_dur Idx_dur;
 
@@ -58,7 +59,10 @@ public:
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
 
-	void get_link_set(std::set<idx_t>& link_set, const Chunk& chunk) const;
+	void get_chunk_link_set(std::set<idx_t>& link_set, const Chunk& chunk) const;
+	void get_op_links(std::vector<idx_pr>& links, idx_t o) const;
+	void get_op_succ_links(std::vector<idx_pr>& links, idx_t o, idx_t s) const;
+
 	
 	METHOD_N(ops)
 	METHOD_N(juncts)
@@ -130,11 +134,7 @@ private:
 
 	inline size_t n_opt_levels() const;
 
-	Chunk_conn get_chunk_conn(const std::set<Idx_dur>& chunk, Idx_dur o);
-
 	bool ops_reachable(const std::vector<idx_t>& vec_from, const std::vector<idx_t>& vec_to);
-
-	
 };
 
 
