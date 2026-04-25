@@ -30,6 +30,8 @@ public:
 	typedef Instance::tim_t tim_t;
 	typedef uint16_t cnt_t;
 
+	typedef Instance::Idx_dur Idx_dur;
+
 	static const idx_t IDX_MAX = Instance::IDX_MAX;
 	static const dur_t DUR_MAX = Instance::DUR_MAX;
 	static const tim_t TIM_MAX = Instance::TIM_MAX;
@@ -49,11 +51,14 @@ public:
 	std::vector<Array<idx_t>> res_chunks = {};
 	std::vector<idx_t> ops_req = {};
 
+
 	size_t chunk_direct_merges = 0;
 	size_t chunk_parallel_merges = 0;
 	
 	Preprocess(const Instance& inst, const bool verify=false);
 	~Preprocess();
+
+	void get_link_set(std::set<idx_t>& link_set, const Chunk& chunk) const;
 	
 	METHOD_N(ops)
 	METHOD_N(juncts)
@@ -74,7 +79,7 @@ public:
 	METHOD_RANGE(trains, idx_t)
 	
 private:
-	struct Op_chunk_chain;
+	enum Chunk_conn { INVALID, DIRECT, PARALLEL };
 
 	std::vector<Junct_edge> junct_succ = {};
 	std::vector<Junct_edge> junct_pred = {};
@@ -88,7 +93,7 @@ private:
 
 	Flag is_op_req;
 
-	std::vector<Instance::Idx_dur> chunk_ops = {};
+	std::vector<idx_t> chunk_ops = {};
 	std::vector<idx_t> op_chunks = {};
 
 	std::vector<Array<Chunk>> train_chunks = {};
@@ -119,28 +124,17 @@ private:
 	void make_resource_chunks();
 	void assign_op_chunks();
 
-	void make_chunk_links();
+	void verify_chunks();
 
 	void make_objs();
 
-	void make_junction_bounds();
-	void make_level_bounds();
-
 	inline size_t n_opt_levels() const;
 
-	bool merge_res_op(std::vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, std::set<idx_t>& op_set);
-	bool is_op_reachable(const std::set<idx_t>& set_from, idx_t target);
-	
-	template<bool forward=true>
-	bool is_op_reachable_temp(const std::set<idx_t>& set_from, idx_t target);
+	Chunk_conn get_chunk_conn(const std::set<Idx_dur>& chunk, Idx_dur o);
 
-	template<bool forward=true>
-	void make_link_map(std::map<std::pair<idx_t, idx_t>, std::set<idx_t>>& link_map, const Chunk& chunk);
-	
-	template<bool forward=true>
-	void add_fixed_link(std::vector<std::set<idx_t>>& fix_links, std::map<idx_t, idx_t>& x_count,
-		std::map<std::pair<idx_t, idx_t>, std::set<idx_t>>& link_map, const Chunk& chunk);
+	bool ops_reachable(const std::vector<idx_t>& vec_from, const std::vector<idx_t>& vec_to);
 
+	
 };
 
 
@@ -233,8 +227,10 @@ struct Preprocess::Chunk
 	idx_t train = IDX_MAX;
 	idx_t res = IDX_MAX;
 	Chunk_state state;
-	Array<Instance::Idx_dur> ops;
-	Array<idx_t> fix_links;
+	Array<idx_t> ops;
+
+	bool operator<(idx_t x) const { return idx < x; }
+	bool operator==(idx_t x) const { return idx == x; }
 };
 
 
@@ -310,16 +306,6 @@ struct Preprocess::Level_edge
 	idx_t op = IDX_MAX;
 	inline bool operator==(const Level_edge& x) const
 	{ return (level == x.level) && (op == x.op); }
-};
-
-
-struct Preprocess::Op_chunk_chain
-{
-	idx_t op = IDX_MAX;
-	dur_t rel_time = 0;
-	cnt_t prev = CNT_MAX;
-	cnt_t next = CNT_MAX;
-	cnt_t has_unlock = false;
 };
 
 

@@ -124,7 +124,7 @@ void Chunk_manager::sync_state()
 				op.level.start : new_state.level.start;
 
 			new_state.level.end = op.level.end;
-			new_state.rel_time = o.rel_time;
+			new_state.rel_time = o.dur;
 
 			
 

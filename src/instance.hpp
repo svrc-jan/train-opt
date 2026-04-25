@@ -88,7 +88,9 @@ private:
 struct Instance::Idx_dur
 {
 	idx_t idx = IDX_MAX;
-	dur_t rel_time = 0;
+	dur_t dur = 0;
+
+	operator idx_t() const { return idx; }
 
 	bool operator<(const Idx_dur& other) const { return this->idx < other.idx; }
 	bool operator==(const Idx_dur& other) const { return this->idx == other.idx; }

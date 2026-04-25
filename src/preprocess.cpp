@@ -57,6 +57,10 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 		cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
 	}
 
+	if (verify) {
+		this->verify_chunks();
+	}
+
 	this->make_objs();
 }
 
@@ -667,6 +671,7 @@ void Preprocess::make_resource_chunks()
 	size_t n_trains = this->n_trains();
 	auto res_range = this->inst.res_range();
 
+	size_t total_ops_count = 0;
 	size_t max_ops_count[n_res];
 	size_t train_ops_count[n_res];
 
@@ -693,10 +698,11 @@ void Preprocess::make_resource_chunks()
 		}
 	}
 
-	vector<vector<Op_chunk_chain>> res_ops(n_res);
+	vector<vector<idx_t>> res_ops(n_res);
 	for (auto r : res_range) {
 		assert(max_ops_count[r] < CNT_MAX);
 		res_ops[r].reserve(max_ops_count[r]);
+		total_ops_count = MAX(total_ops_count, max_ops_count[r]);
 	}
 
 	this->chunks.reserve(this->inst.n_op_res());
@@ -705,11 +711,12 @@ void Preprocess::make_resource_chunks()
 	this->chunk_direct_merges = 0;
 	this->chunk_parallel_merges = 0;
 
-	set<idx_t> op_set = {};
-	set<idx_t> conn_op_set;
+	vector<vector<idx_t>> chunk_sets = {};
+
+	Disjoint_set disj_set(total_ops_count);
+
 
 	size_t chunk_idx = 0;
-	
 	for (auto& train : this->trains) {	
 		for (auto r : res_range) {
 			res_ops[r].clear();
@@ -718,60 +725,84 @@ void Preprocess::make_resource_chunks()
 		for (auto& op : train.inst->ops) {
 
 			for (auto& res : op.res) {
-				res_ops[res.idx].push_back({
-					.op = op.idx,
-					.rel_time = res.rel_time,
-					.prev = CNT_MAX,
-					.next = CNT_MAX,
-				});
+				res_ops[res.idx].push_back({op.idx});
 			}
 		}
 
+
 		for (auto r : res_range) {
-
 			auto& ro = res_ops[r];
-			size_t n = res_ops[r].size();
+			size_t n_ops = ro.size();
 
-			op_set.clear();
+			disj_set.resize(n_ops);
+			disj_set.reset();
 
-			for (size_t i = 0; i < n; i++) {
-				op_set.insert(ro[i].op);
+			for (size_t i = 0; i < n_ops; i++) {
+				idx_t a = ro[i];
+				auto& op = this->ops[a];
+				for (size_t j = i + 1; j < n_ops; j++) {
+					idx_t b = ro[j];
 
-				if (!this->merge_res_op(ro, i, r, true, conn_op_set)) {
-					this->merge_res_op(ro, i, r, false, conn_op_set);
+					if (op.inst->pred.find(b)) {
+						disj_set.union_set(i, j);
+					}
+
+					if (op.inst->succ.find(b)) {
+						disj_set.union_set(i, j);
+					}
 				}
 			}
 
-			train.chunks[r].set_size(0);
+			auto& res = disj_set.get_result();
+			this->chunk_direct_merges += disj_set.n_items - disj_set.n_sets;
 
-			for (size_t i = 0; i < n; i++) {
-				if (ro[i].prev < CNT_MAX) {
-					continue;
+			chunk_sets.clear();
+			chunk_sets.resize(disj_set.n_sets);
+
+			for (size_t i = 0; i < n_ops; i++) {
+				chunk_sets[res[i]].push_back(ro[i]);
+			}
+
+			for (size_t i = 0; i < chunk_sets.size();) {
+				size_t j;
+				for (j = i + 1; j < chunk_sets.size(); j++) {
+					if (!ops_reachable(chunk_sets[i], chunk_sets[j]) &&
+						!ops_reachable(chunk_sets[j], chunk_sets[i])) {
+					
+						break;			
+					}
 				}
+
+				if (j == chunk_sets.size()) {
+					i++;
+				}
+				else {
+					chunk_sets[i].insert(chunk_sets[i].end(), 
+						chunk_sets[j].begin(), chunk_sets[j].end());
+
+					chunk_sets[j] = chunk_sets.back();
+					chunk_sets.pop_back();
+
+					this->chunk_parallel_merges++;
+				}
+			}
+
+			for (auto& x : chunk_sets) {
+				assert(!x.empty());
 
 				Chunk chunk = {
 					.idx = (idx_t)chunk_idx++,
 					.train = train.idx,
 					.res = r,
-					.state = {
-						.level = {0, IDX_MAX},
-						.rel_time = 0
-					},
-					.ops = {nullptr, nullptr},
-					.fix_links = {nullptr, nullptr}
+					.state = {{IDX_MAX, IDX_MAX}, 0},
+					.ops = {nullptr, nullptr}
 				};
 
-				chunk.ops.clear();
+				sort(x.begin(), x.end());
 
-				cnt_t j = i;
-				while (j < CNT_MAX) {
-					auto ret = op_set.erase(ro[j].op);
-					assert(ret == 1);
-
-					chunk.ops.increment_size(1);
-					this->chunk_ops.push_back({ro[j].op, ro[j].rel_time});
-
-					j = ro[j].next;
+				chunk.ops.set_size(x.size());
+				for (auto o : x) {
+					this->chunk_ops.push_back(o);
 				}
 
 				train.chunks[r].increment_size(1);
@@ -802,14 +833,14 @@ void Preprocess::make_resource_chunks()
 		chunk.ops.assign_offset(this->chunk_ops, chunk_ops_idx, false);
 
 		for (auto o : chunk.ops) {
-			auto& op = this->ops[o.idx];
+			auto& op = this->ops[o];
 			
 			auto res = op.inst->res.find(chunk.res);
 			assert(res != nullptr);
 
 			chunk.state.level.start = MAX(chunk.state.level.start, op.level.start);
-			chunk.state.level.end = MAX(chunk.state.level.end, op.level.end);
-			chunk.state.rel_time = MIN(chunk.state.rel_time, o.rel_time);
+			chunk.state.level.end = MIN(chunk.state.level.end, op.level.end);
+			chunk.state.rel_time = MIN(chunk.state.rel_time, res->dur);
 		}
 	}
 
@@ -835,148 +866,6 @@ void Preprocess::make_resource_chunks()
 	}
 }
 
-bool Preprocess::merge_res_op(vector<Op_chunk_chain>& ro, idx_t i, idx_t r, bool match_time, set<idx_t>& op_set)
-{
-	auto& op = this->inst.ops[ro[i].op];
-
-	for (int j = i - 1; (j >= 0); j--) {
-		if (ro[j].next < CNT_MAX) {
-			continue;
-		}
-
-		bool connect_valid = false;
-		bool time_valid = true;
-
-		cnt_t k = j;
-		while (k < CNT_MAX) {
-			if (!connect_valid) {
-				if (op.pred.find(ro[k].op) != nullptr) {
-					connect_valid = true;
-				}
-				else if (op.succ.find(ro[k].op) != nullptr) {
-					connect_valid = true;
-				}
-			}
-
-			if (match_time && (ro[i].rel_time != ro[j].rel_time) 
-				&& this->inst.is_op_unlock(ro[k].op, r)) {
-				
-				time_valid = false;
-				break;
-			}
-
-			k = ro[k].prev;
-			assert(k != j);
-		}
-
-		if (!time_valid) {
-			continue;
-		}
-
-		if (connect_valid) {
-			ro[j].next = i;
-			ro[i].prev = j;
-
-			this->chunk_direct_merges++;
-			return true;
-		}
-
-		op_set.clear();
-		k = j;
-		while (k < CNT_MAX) {
-			op_set.insert(ro[k].op);
-			k = ro[k].prev;
-		}
-
-		if (!this->is_op_reachable(op_set, ro[i].op)) {
-			ro[j].next = i;
-			ro[i].prev = j;
-
-			this->chunk_parallel_merges++;
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
-bool Preprocess::is_op_reachable(const set<idx_t>& set_from, idx_t target)
-{
-	return this->is_op_reachable_temp<true>(set_from, target) ||
-		this->is_op_reachable_temp<false>(set_from, target);
-}
-
-template<bool forward>
-bool Preprocess::is_op_reachable_temp(const set<idx_t>& set_from, idx_t target)
-{
-	auto& op_target = this->ops[target];
-
-	this->set_.clear();
-	while(!this->queue_.empty()) { this->queue_.pop(); };
-
-	idx_t l_limit;
-	if constexpr (forward) {
-		l_limit = op_target.level.end;
-	}
-	else {
-		l_limit = op_target.level.start;
-	}
-
-	for (auto x : set_from) {
-		if (x == target) {
-			return true;
-		}
-
-		auto& op = this->ops[x];
-		if (op_target.train == op.train) {
-			this->queue_.push(x);
-			this->set_.insert(x);
-		}
-	}
-
-	while (!this->queue_.empty()) {
-		idx_t o = this->queue_.front(); this->queue_.pop();
-		
-
-		if constexpr (forward) {
-			idx_t l = this->ops[o].level.start;
-			if (l >= l_limit) {
-				continue;
-			}
-		}
-		else {
-			idx_t l = this->ops[o].level.end;
-			if (l <= l_limit) {
-				continue;
-			}
-		}
-		
-		Array<idx_t> neig;
-		if constexpr (forward) {
-			neig = this->inst.ops[o].succ;
-		}
-		else {
-			neig = this->inst.ops[o].pred;
-		}
-
-
-		for (auto x : neig) {
-			if (x == target) {
-				return true;
-			}
-
-			if (this->set_.contains(x)) {
-				continue;
-			}
-
-			this->queue_.push(x);
-			this->set_.insert(x);
-		}
-	}
-
-	return false;
-}
 
 void Preprocess::assign_op_chunks()
 {
@@ -986,7 +875,7 @@ void Preprocess::assign_op_chunks()
 
 	for (auto& chunk : chunks) {
 		for (auto& o : chunk.ops) {
-			this->ops[o.idx].chunks.increment_size(1);
+			this->ops[o].chunks.increment_size(1);
 		}
 	}
 
@@ -999,7 +888,45 @@ void Preprocess::assign_op_chunks()
 	assert(op_chunks_idx == this->op_chunks.size());
 	for (auto& chunk : chunks) {
 		for (auto& o : chunk.ops) {
-			this->ops[o.idx].chunks.push_back(chunk.idx);
+			this->ops[o].chunks.push_back(chunk.idx);
+		}
+	}
+}
+
+
+void Preprocess::verify_chunks()
+{
+	for (auto& chunk : this->chunks) {
+		assert(this->res_chunks[chunk.res].find_asc(chunk.idx) != nullptr);
+		assert(this->trains[chunk.train].chunks[chunk.res].find_asc(chunk.idx) != nullptr);
+
+		for (auto o : chunk.ops) {
+			auto& op = this->ops[o];
+			assert(op.chunks.find_asc(chunk.idx) != nullptr);
+			assert(op.inst->res.find_asc(chunk.res) != nullptr);
+
+			for (auto& x : op.chunks) {
+				if (x == chunk.idx) { continue; }
+
+				assert(this->chunks[x].res != chunk.res);
+			}
+
+			for (auto p : op.inst->pred) {
+				for (auto& x : this->ops[p].chunks) {
+					if (x == chunk.idx) { continue; }
+
+					assert(this->chunks[x].res != chunk.res);
+				}
+			}
+
+
+			for (auto s : op.inst->pred) {
+				for (auto& x : this->ops[s].chunks) {
+					if (x == chunk.idx) { continue; }
+
+					assert(this->chunks[x].res != chunk.res);
+				}
+			}
 		}
 	}
 }
@@ -1027,5 +954,72 @@ void Preprocess::make_objs()
 		};
 
 		this->objs.push_back(obj);
+	}
+}
+
+
+bool Preprocess::ops_reachable(const std::vector<idx_t>& vec_from, const std::vector<idx_t>& vec_to)
+{
+	auto& visited = this->set_;
+	auto& q = this->queue_;
+
+	visited.clear();
+
+	idx_t l_max = 0;
+
+	for (auto o : vec_to) {
+		l_max = MAX(l_max, this->ops[o].level.start);
+	}
+
+	for (auto o : vec_from) {
+		q.push(o);
+		visited.insert(o);
+	}
+
+
+	while (!q.empty()) {
+		idx_t o = q.front(); q.pop();
+		auto& op = this->ops[o];
+
+		if (op.level.start > l_max) { continue; }
+
+		for (auto s : op.inst->succ) {
+			auto ret = visited.insert(s);
+			if (ret.second) {
+				q.push(s);
+			}
+		}
+	}
+
+	for (auto x : vec_to) {
+		if (visited.contains(x)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+void Preprocess::get_link_set(set<idx_t>& link_set, const Chunk& chunk) const
+{
+	link_set.clear();
+	for (auto o : chunk.ops) {
+		auto& op = this->ops[o];
+		for (auto& x : op.chunks) {
+			if (x == chunk.idx) { continue; }
+
+			assert(this->chunks[x].res != chunk.res);
+			link_set.insert(x);
+		}
+
+		for (auto s : op.inst->succ) {
+			for (auto& x : this->ops[s].chunks) {
+				if (x == chunk.idx) { continue; }
+
+				assert(this->chunks[x].res != chunk.res);
+				link_set.insert(x);
+			}
+		}
 	}
 }

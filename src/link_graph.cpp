@@ -1,6 +1,7 @@
 #include "link_graph.hpp"
 
 
+#include "utils/stl_print.hpp"
 
 
 using namespace std;
@@ -10,264 +11,187 @@ Link_graph::Link_graph(const Preprocess& prepr)
 	: inst(prepr.inst), prepr(prepr)
 {	
 	cout << "Link_graph" << endl;
-	// this->make_chunks();
 
-	// this->make_chunk_links();
-	// cout << "  chunk links: " << this->chunk_link.size() << endl;
+	this->make_chunks();
+	this->make_links();
 
-	this->make_link_map();
+	cout << "  links: " << this->chunk_links.size()/2 << endl;
+
 }
 
+
+Link_graph::~Link_graph()
+{
+
+}
 
 void Link_graph::make_chunks()
 {
 	this->chunks.resize(this->prepr.n_chunks());
-	this->visited.set_n_items(this->prepr.n_sects());
 
 	for (auto c : this->prepr.chunks_range()) {
 		auto& chunk = this->chunks[c];
-		chunk.idx = c;
+		chunk.fwd.clear();
+		chunk.bkw.clear();
 		chunk.prepr = &this->prepr.chunks[c];
-		chunk.train = chunk.prepr->train;
-		chunk.res = chunk.prepr->res;
 	}
 }
 
-
-void Link_graph::make_chunk_links()
+void Link_graph::make_links()
 {
-	// auto res_range = this->inst.res_range();
-
 	set<idx_t> link_set;
-	
+
 	size_t link_idx = 0;
 	for (auto& chunk : this->chunks) {
-		link_set.clear();
-
-		for (auto o : chunk.prepr->ops) {
-			auto& op = this->prepr.ops[o.idx];
-
-			for (auto x : op.chunks) {
-				if (x == chunk.idx) { continue; }
-
-				link_set.insert(x);
-			}
-
-			for (auto s : op.inst->succ) {
-				auto& succ = this->prepr.ops[s];
-
-				for (auto x : succ.chunks) {
-					if (x == chunk.idx) { continue; }
-
-					link_set.insert(x);
-				}
-			}
-		}
-
+		this->prepr.get_link_set(link_set, *chunk.prepr);
+		
 		chunk.fwd.set_size(link_set.size());
+		link_idx += link_set.size();
 
+		idx_t prev_r = IDX_MAX;
 		for (auto x : link_set) {
+			idx_t r = this->prepr.chunks[x].res;
+			assert(prev_r <= r || prev_r == IDX_MAX);
+		
+			this->chunk_links.push_back({r, x});
 			this->chunks[x].bkw.increment_size(1);
-		}
 
-		link_idx += 2*link_set.size();
+			prev_r = r;
+		}
 	}
 
-	this->chunk_link.resize(link_idx);
+	this->chunk_links.resize(2*link_idx);
 
 	link_idx = 0;
 	for (auto& chunk : this->chunks) {
-		chunk.all.set_size(chunk.fwd.size() + chunk.bkw.size());
-		if (!chunk.all.empty()) {
-			chunk.all.set_begin(&this->chunk_link[link_idx]);
-		}
-		
-		chunk.fwd.assign_offset(this->chunk_link, link_idx, true);
-		chunk.bkw.assign_offset(this->chunk_link, link_idx, true);
+		chunk.fwd.assign_offset(this->chunk_links, link_idx, false);
 	}
-
-	assert(link_idx == this->chunk_link.size());
-
-	link_idx = 0;
-	for (auto& chunk : this->chunks) {
-		link_set.clear();
-
-		for (auto o : chunk.prepr->ops) {
-			auto& op = this->prepr.ops[o.idx];
-
-			for (auto x : op.chunks) {
-				if (x == chunk.prepr->idx) { continue; }
-
-				link_set.insert(x);
-			}
-
-			for (auto s : op.inst->succ) {
-				auto& succ = this->prepr.ops[s];
-
-				for (auto x : succ.chunks) {
-					if (x == chunk.prepr->idx) { continue; }
-
-					link_set.insert(x);
-				}
-			}
-		}
-
-		assert(!link_set.contains(chunk.idx));
-		for (auto x : link_set) {
-			chunk.fwd.push_back(x);
-			this->chunks[x].bkw.push_back(chunk.prepr->idx);
-		}
-
-		link_idx += 2*link_set.size();
-	}
-
-	assert(link_idx == this->chunk_link.size());
 
 	for (auto& chunk : this->chunks) {
-		assert(chunk.fwd.is_asc_strict());
-		assert(chunk.bkw.is_asc_strict());
+		chunk.bkw.assign_offset(this->chunk_links, link_idx, true);
 	}
-}
 
+	assert(link_idx == this->chunk_links.size());
 
-void Link_graph::link_chunks(idx_t c_from, idx_t c_to)
-{
-	auto link_from = this->chunks[c_from].fwd.find_asc(c_to);
-	auto link_to = this->chunks[c_to].bkw.find_asc(c_from);
+	for (auto& chunk : this->chunks) {
+		idx_t r = chunk.prepr->res;
 
-	assert(link_from != nullptr && link_to != nullptr);
-
-	link_from->active = true;
-	link_from->forward = true;
-	link_to->active = true;
-	link_to->forward = false;
-	
-}
-
-
-void Link_graph::link_op_self(idx_t o)
-{
-	auto& op = this->prepr.ops[o];
-
-	for (auto a : op.chunks) {
-		for (auto b : op.chunks) {
-			if (a == b) { continue; }
-			this->link_chunks(a, b);
+		for (auto& lnk : chunk.fwd) {
+			this->chunks[lnk.chunk].bkw.push_back({r, chunk.prepr->idx});
 		}
 	}
 }
 
 
-void Link_graph::link_op_succ(idx_t o, idx_t s)
+void Link_graph::print_chains(bool force)
 {
-	for (auto a : this->prepr.ops[o].chunks) {
-		for (auto b : this->prepr.ops[s].chunks) {
-			if (a == b) { continue; }
-			this->link_chunks(a, b);
-		}
-	}
-}
+	Flag chunk_done(this->prepr.n_chunks());
 
+	pair<idx_t, idx_t> curr;
+	set<pair<idx_t, idx_t>> chain;
 
-void Link_graph::make_link_map()
-{
-	size_t n_res = this->inst.n_res;
-	size_t n_trains = this->inst.n_trains();
+	for (auto& train1 : this->prepr.trains) {
+		for (idx_t t2 = train1.idx + 1; t2 < this->inst.n_trains(); t2++) {
+			auto& train2 = this->prepr.trains[t2];
 
-	auto res_range = this->inst.res_range();
+			chunk_done.clear();
 
-	Array<pair<idx_t, idx_t>>*** map = new pair<idx_t, idx_t>**[n_trains];
-	pair<idx_t, idx_t>** map_l2 = new pair<idx_t, idx_t>*[n_trains*n_res];
-	pair<idx_t, idx_t>* map_l3 = new pair<idx_t, idx_t>[n_trains*n_res*n_res];
+			bool start_printed = false;
 
-	for (size_t t = 0; t < n_trains; t++) {
-		map[t] = &map_l2[t*n_res];
-	}
+			for (auto r : this->inst.res_range()) {
+				for (auto& chunk1 : train1.chunks[r]) {
+					if (chunk_done[chunk1.idx]) { continue; }
 
-	for (size_t i = 0; i < n_trains*n_res; i++) {
-		map_l2[i] = &map_l3[i*n_res];
-	}
+					for (auto& chunk2 : train2.chunks[r]) {
+						if (chunk_done[chunk2.idx]) { continue; }
 
-	for (size_t i = 0; i < n_trains*n_res*n_res; i++) {
-		map_l3[i] = {IDX_MAX, IDX_MAX};
-	}
+						chain.clear();
 
-	set<idx_t> link_set;
-	for (auto& train : this->prepr.trains) {
-		for (auto r : res_range) {
-			for (auto& chunk : train.chunks[r]) {
-				link_set.clear();
-				for (auto& o : chunk.ops) {
-					auto& op = this->prepr.ops[o.idx];
-					for (auto x : op.chunks) {
-						if (x != chunk.idx) {
-							link_set.insert(x);
+						pair<idx_t, idx_t> x = {chunk1.idx, chunk2.idx};
+						chain.insert(x);
+						this->extend_chain(chain, x, {force, force});
+
+						for (auto k : chain) {
+							chunk_done += k.first;
+							chunk_done += k.second;
 						}
-					}
 
-					for (auto& s : op.inst->succ) {
-						for (auto x : this->prepr.ops[s].chunks) {
-							if (x != chunk.idx) {
-								link_set.insert(x);
+						if (chain.size() > 1) {
+							if (!start_printed) {
+								cout << endl << train1.idx << " / " << t2 << " chain lengths:";
+								start_printed = true;
 							}
+							cout << " " << chain.size();
 						}
 					}
-				}
-
-				for (auto x : link_set) {
-					auto rx = this->prepr.chunks[x].res;
-					assert(rx != r);
-
-					auto& entry = map[train.idx][r][rx];
-					assert(entry.first == IDX_MAX && entry.second == IDX_MAX);
-
-					entry = {chunk.idx, x};
 				}
 			}
 		}
 	}
 
-
-	delete[] map;
-	delete[] map_l2;
-	delete[] map_l3;
-}
-
-void Link_graph::get_link_set(set<idx_t>& link_set, const Preprocess::Chunk& chunk)
-{
-	link_set.clear();
-
-
+	cout << endl;
 }
 
 
-
-void Link_graph::clear_chunk(idx_t c)
+void Link_graph::extend_chain(set<pair<idx_t, idx_t>>& chain, 
+	const pair<idx_t, idx_t>& curr, const pair<uint8_t, uint8_t>& force)
 {
-	for (auto link : this->chunks[c].fwd) {
-		auto x = link.idx;
+	auto& chunk_first = this->chunks[curr.first];
+	auto& chunk_second = this->chunks[curr.second];
 
-		auto& other = this->chunks[x];
-		auto other_link = other.bkw.find_asc(c);
-		
-		assert (other_link != nullptr);
-		
-		link.active = false;
-		other_link->active = false;
+	for (auto& lnk_first : chunk_first.fwd) {
+		if (!lnk_first.active && !force.first) { continue; }
+
+		for (auto& lnk_second : chunk_second.bkw) {
+			if (!lnk_second.active && !force.second) { continue; }
+
+			if (lnk_first.res != lnk_second.res) { continue; }
+
+			pair<idx_t, idx_t> x = {lnk_first.chunk, lnk_second.chunk};
+			auto ret = chain.insert(x);
+			
+			if (ret.second) {
+				this->extend_chain(chain, x, force);
+			}
+		}
 	}
 
-	
-	for (auto link : this->chunks[c].bkw) {
-		auto x = link.idx;
+	for (auto& lnk_first : chunk_first.bkw) {
+		if (!lnk_first.active && !force.first) { continue; }
+		
+		for (auto& lnk_second : chunk_second.fwd) {
+			if (!lnk_second.active && !force.second) { continue; }
 
-		auto& other = this->chunks[x];
-		auto other_link = other.bkw.find_asc(c);
-		
-		assert (other_link != nullptr);
-		
-		link.active = false;
-		other_link->active = false;
+			if (lnk_first.res != lnk_second.res) { continue; }
+
+			pair<idx_t, idx_t> x = {lnk_first.chunk, lnk_second.chunk};
+			auto ret = chain.insert(x);
+			
+			if (ret.second) {
+				this->extend_chain(chain, x, force);
+			}
+		}
 	}
 }
 
 
+void Link_graph::set_op_succ(idx_t o, idx_t s)
+{
+	for (auto c_o : this->prepr.ops[o].chunks) {
+		auto chunk_o = this->chunks[c_o];
+
+		for (auto c_s : this->prepr.ops[s].chunks) {
+			auto chunk_s = this->chunks[c_s];
+
+			if (c_o == c_s) { continue; }
+
+			auto lnk_o = chunk_o.fwd.find_asc(c_s);
+			auto lnk_s = chunk_s.bkw.find_asc(c_o);
+
+			assert(lnk_o != nullptr && lnk_s != nullptr);
+			
+			lnk_o->active = true;
+			lnk_s->active = true;
+		}
+	}
+}

@@ -20,32 +20,36 @@ int main(int argc, char const *argv[])
 		}
 
 		sort(entries.begin(), entries.end());
+
+		for (auto& entry : entries) {
+			cout << entry << endl;
+			Instance inst(entry);
+			Preprocess prepr(inst, true);
+			Link_graph link_graph(prepr);
+		}
 	}
 	else {
-		entries.push_back(argv[1]);
-	}
 
-	for (auto& entry : entries) {
-		cout << entry << endl;
-		Instance inst(entry);
+		cout << argv[1] << endl;
+		Instance inst(argv[1]);
 		Preprocess prepr(inst, true);
 		Link_graph link_graph(prepr);
 
-		// for (auto& train : inst.trains) {
-		// 	uint16_t o = train.op_first;
-		// 	link_graph.link_op_self(o);
+		for (auto& train : inst.trains) {
+			auto o = train.op_first;
+			while (true) {
+				auto& op = inst.ops[o];
 
-		// 	while (true) {
-		// 		auto& op = inst.ops[o];
-		// 		if (op.n_succ() == 0) {
-		// 			break;
-		// 		}
+				if (op.n_succ() == 0) { break ; }
+				auto s = op.succ.get_random_item();
 
-		// 		uint16_t s = op.succ.get_random_item();
-		// 		link_graph.link_op_succ(o, s);
-		// 		o = s;
-		// 	}
-		// }
+				link_graph.set_op_succ(o, s);
+				o = s;
+			}
+			
+		}
+
+		link_graph.print_chains();
 	}
 
 	return 0;
