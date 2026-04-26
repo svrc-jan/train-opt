@@ -19,7 +19,8 @@ int main(int argc, char const *argv[])
 	GRBEnv grb_env = GRBEnv(true);
 	try {
 		grb_env.set(GRB_IntParam_OutputFlag, 0);
-		// grb_env.set(GRB_IntParam_ThreadLimit, 1);
+		grb_env.set(GRB_IntParam_ThreadLimit, 8);
+		grb_env.set(GRB_IntParam_Threads, 8);
 	}
 	catch (const GRBException& ex) {
 		cout << "exception: " << ex.getMessage();
@@ -34,7 +35,8 @@ int main(int argc, char const *argv[])
 	Solver slvr(prepr, grb_env);
 
 	slvr.plan_routes();
-	slvr.solve();
+	slvr.feasible_solve();
+	slvr.improving_solve();
 
 	return 0;
 }

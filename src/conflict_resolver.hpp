@@ -29,6 +29,8 @@ public:
 
 	const Instance& inst;
 	const Preprocess& prepr;
+
+	std::map<idx_t, idx_t> crit_path_count;
 	
 	Conflict_resolver(Solver& solver);
 	~Conflict_resolver();
@@ -36,19 +38,30 @@ public:
 	void init_data();
 
 	void sync_graph();
-	void optimize_model();
+	int optimize_model();
 
-	bool add_conflict(idx_t train);
+	idx_pr find_conflict_train(idx_t train);
+	idx_pr find_conflict_chunk(idx_t chunk);
+
+	void make_crit_path_count();
+
+	void add_conflict(idx_pr chunk);
 	void add_cycle_cons();
 	bool add_path_cons();
 
 	void freeze_conflicts();
-	void clear_constrs();
+	void clear_constrs(bool keep_critical=true);
+	void unfreeze_train_confs(idx_t train);
+	
+	tim_t get_obj_val();
+	void set_obj_ub(tim_t bound);
+
 
 private:
 	struct Constr;
 	struct Cycle_constr;
 	struct Path_constr;
+	struct Conf_assign;
 
 	Solver& slvr;
 	GRBModel model;
@@ -64,8 +77,8 @@ private:
 	std::vector<Cycle_constr> cycle_constrs = {};
 	std::vector<Path_constr> path_constrs = {};
 
-	std::vector<std::pair<idx_t, int8_t>> conf_hlpr = {};
-	std::vector<std::pair<idx_t, int8_t>> conf_hlpr2 = {};
+	std::vector<Conf_assign> conf_hlpr = {};
+	std::vector<Conf_assign> conf_hlpr2 = {};
 	
 	std::set<idx_pr> conf_chain;
 	std::vector<Edge> conf_edges;
@@ -78,8 +91,13 @@ private:
 	void unfreeze_iis();
 	void sync_values();
 
+	void purge_dominated_cycle(const Cycle_constr& cons);
+	void purge_dominated_path(const Path_constr& cons);
 
 	void make_conf_edges(const Conflict& conf, int8_t);
+
+	bool is_cons_conf_active(const Constr& cons);
+
 };
 
 
@@ -87,6 +105,7 @@ struct Conflict_resolver::Conflict
 {
 	idx_t idx = IDX_MAX;
 	int8_t frozen = false;
+	idx_pr train = {IDX_MAX, IDX_MAX};
 	Tracked<int8_t> active = false;
 	Tracked<int8_t> value = false;
 
@@ -113,10 +132,10 @@ struct Conflict_resolver::Obj
 
 struct Conflict_resolver::Constr
 {
-	std::vector<std::pair<idx_t, int8_t>> confs = {};
+	std::vector<Conf_assign> confs = {};
 	GRBConstr model;
 
-	bool is_conf_overlap(const std::set<idx_t>& x);
+	bool has_conf_subset(const std::vector<Conf_assign>& subset) const;
 };
 
 
@@ -131,4 +150,14 @@ struct Conflict_resolver::Path_constr : Conflict_resolver::Constr
 	idx_t obj_idx = IDX_MAX;
 	uint8_t is_bin = false;
 	tim_t delay = 0;
+};
+
+
+struct Conflict_resolver::Conf_assign
+{
+	idx_t idx = IDX_MAX;
+	int8_t value = 0;
+
+	inline bool operator<(const Conf_assign& x) const { return idx < x.idx; }
+	inline bool operator==(const Conf_assign& x) const { return idx == x.idx; }
 };

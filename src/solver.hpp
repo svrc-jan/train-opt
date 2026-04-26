@@ -25,6 +25,8 @@ class Conflict_resolver;
 class Solver
 {
 public:
+	enum Optimize_state {OPTIMAL, CUTOFF};
+	
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
@@ -61,8 +63,12 @@ public:
 	~Solver();
 
 	void plan_routes();
-	void solve();
-	void resolve_conflicts(idx_t t);
+
+	Optimize_state feasible_solve();
+	void improving_solve();
+
+	Optimize_state resolve_conflicts_chunk(idx_t c);
+	void resolve_conflicts_train(idx_t t);
 
 	inline Event_graph::tim_t time(vtx_t v) const { return this->event_graph.time[v]; }
 	
@@ -79,5 +85,9 @@ private:
 	void sync_chunk_mngr_time();
 	void sync_link_graph();
 	bool sync_event_graph();
+	Optimize_state sync_conf_model();
 
+	idx_t choose_most_conflicting_train(double stretch=0.0);
+	idx_t choose_most_conflicting_chunk(double stretch=0.0);
+	idx_t choose_earliest_conflicting_chunk();
 };
