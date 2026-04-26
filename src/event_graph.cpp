@@ -74,10 +74,25 @@ void Event_graph::remove_edge(const Edge& x)
 	this->need_sync = true;
 }
 
+void Event_graph::add_edges(const std::vector<Edge>& vec)
+{
+	for (auto& x : vec) {
+		this->add_edge(x);
+	}
+}
+
+
+void Event_graph::remove_edges(const std::vector<Edge>& vec)
+{
+	for (auto& x : vec) {
+		this->remove_edge(x);
+	}
+}
+
 
 void Event_graph::update_edge(const Edge& x_old, const Edge& x_new)
 {
-	if (x_old == x_new) {
+	if (x_old == x_new || (!x_old.is_valid() && !x_new.is_valid())) {
 		return;
 	}
 	

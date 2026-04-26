@@ -33,6 +33,7 @@ int main(int argc, char const *argv[])
 	Preprocess prepr(inst);
 	Solver slvr(prepr, grb_env);
 
+	slvr.plan_routes();
 	slvr.solve();
 
 	return 0;

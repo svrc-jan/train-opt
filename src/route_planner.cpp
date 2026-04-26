@@ -18,7 +18,7 @@ Route_planner::~Route_planner()
 }
 
 
-void Route_planner::get_random_ops()
+void Route_planner::get_random_ops(double dur_stretch)
 {
 	this->op_active.curr.clear();
 	for (auto& x : this->op_succ) {
@@ -41,6 +41,9 @@ void Route_planner::get_random_ops()
 			level.next = op.level.end;
 			level.dur = op.inst->dur;
 			level.lb = op.inst->start_lb;
+			if (dur_stretch > 0.0) {
+				level.stretch_dur(dur_stretch);
+			}
 
 			if (op.inst->succ.size() == 0) { break ; }
 			auto s = op.inst->succ.get_random_item();
@@ -119,6 +122,7 @@ bool Route_planner::optimize_model()
 void Route_planner::init_data()
 {
 	this->init_ops();
+	this->init_levels();
 	this->init_routes();
 	this->init_model();
 }
@@ -143,6 +147,14 @@ void Route_planner::init_ops()
 	this->op_dirty.set_n_items(n_ops);
 
 	this->op_succ.resize(n_ops, {IDX_MAX, IDX_MAX});
+}
+
+void Route_planner::init_levels()
+{
+	this->levels.resize(this->prepr.n_levels());
+	for (auto l : this->prepr.levels_range()) {
+		this->levels[l].idx = l;
+	}
 }
 
 

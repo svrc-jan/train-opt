@@ -53,15 +53,16 @@ public:
 	std::unique_ptr<Route_planner> route_plnr = nullptr;
 	std::unique_ptr<Conflict_resolver> conf_rslvr = nullptr;
 
-	std::vector<idx_t> dirty_hlpr = {};
+	std::vector<idx_t> list_hlpr = {};
 
-	Flag op_active;
-	Flag op_dirty;
+	Flag time_dirty;
 
 	Solver(const Preprocess& prepr, GRBEnv& grb_env);
 	~Solver();
 
 	void plan_routes();
+	void solve();
+	void resolve_conflicts(idx_t t);
 
 	inline Event_graph::tim_t time(vtx_t v) const { return this->event_graph.time[v]; }
 	
@@ -74,4 +75,8 @@ private:
 	void init_levels();
 
 	void get_op_changes();
+	void sync_chunk_mngr_state();
+	void sync_link_graph();
+	bool sync_event_graph();
+
 };

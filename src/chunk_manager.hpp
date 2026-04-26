@@ -13,17 +13,17 @@ class Solver;
 class Chunk_manager
 {
 public:
-	struct Link;
 	struct Res;
-	struct Chain;
 
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
-	typedef Preprocess::State Chunk_state;
+	typedef Preprocess::idx_pr idx_pr;
+	typedef Preprocess::State State;
 
 	typedef Event_graph::edg_t edg_t; 
 	typedef Event_graph::vtx_t vtx_t;
+	typedef Event_graph::Edge Edge;
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
@@ -37,26 +37,25 @@ public:
 
 	Flag is_active;
 
-	std::vector<Chunk_state> state = {};
-	std::vector<Link> link = {};
+	std::vector<State> state = {};
 	std::vector<Interval<tim_t>> time = {};
+	std::vector<Res> res = {};
 
 	std::vector<idx_t> res_idx = {};
 	std::vector<idx_t> train_idx = {};
 
-	std::vector<Res> res = {};
+	
 
 	Chunk_manager(Solver& solver);
 	~Chunk_manager();
 
 	void init_data();
 
-	inline void state_change(idx_t c);
-	inline void time_change(idx_t l);
-
 	void sync_state(const Flag& op_dirty, const Flag& op_active);
-	void sync_time();
+	void sync_time(const Flag& level_time_dirty);
 	void sync_res();
+
+	inline Edge get_edge(const idx_pr& chunk, edg_t e) const;
 
 
 private:
@@ -71,24 +70,11 @@ private:
 	std::vector<idx_t> res_data = {};
 	std::vector<std::vector<idx_t>> level_chunks = {};
 
-	std::set<idx_t> new_link_fwd = {};
-	std::set<idx_t> new_link_bkwd = {};
-
 	void init_levels();
 	void init_chunks();
 	void init_res();
 
 	bool update_level_chunks(idx_t c, idx_t l_old, idx_t l_new);
-};
-
-
-struct Chunk_manager::Link
-{
-	std::set<idx_t> fwd;
-	std::set<idx_t> bkwd;
-
-	size_t size() const { return fwd.size() + bkwd.size(); }
-	inline const std::set<idx_t>& get_combination() const; 
 };
 
 
@@ -100,14 +86,6 @@ struct Chunk_manager::Res
 };
 
 
-inline void Chunk_manager::time_change(idx_t l)
-{
-
-	for (auto c : this->level_chunks[l]) {
-		this->time_dirty += c;
-	}
-}
-
 struct Chunk_manager::Time_cmp
 {
 	const std::vector<Interval<tim_t>>& time;
@@ -116,3 +94,9 @@ struct Chunk_manager::Time_cmp
 
 
 
+inline Event_graph::Edge Chunk_manager::get_edge(const idx_pr& chunk, edg_t e) const
+{
+	auto& state_from = this->state[chunk.first];
+	auto& state_to = this->state[chunk.second];
+	return {{state_from.level.end, state_to.level.start}, state_from.dur, e};
+}

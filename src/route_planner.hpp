@@ -36,6 +36,7 @@ public:
 
 	Tracked<Flag> op_active;
 	Flag op_dirty;
+
 	std::vector<Tracked<idx_t>> op_succ = {};
 	std::vector<Level> levels = {};
 
@@ -46,7 +47,7 @@ public:
 	void init_data();
 	void sync_graph();
 
-	void get_random_ops();
+	void get_random_ops(double dur_stretch=0.0);
 	void snap_ops();
 
 private:
@@ -64,6 +65,7 @@ private:
 	std::vector<double> chunk_price = {};
 
 	void init_ops();
+	void init_levels();
 	void init_routes();
 	void init_model();
 
@@ -95,6 +97,8 @@ struct Route_planner::Level
 	Tracked<idx_t> next = {IDX_MAX};
 	Tracked<dur_t> dur = {0};
 	Tracked<tim_t> lb = {IDX_MAX};
+
+	void stretch_dur(double by) { dur = (dur_t)MIN((double)DUR_MAX, round(dur*(1 + by))); }
 
 	Edge edge_old() const { return {{idx, next.old}, dur.old, EDG_MAX}; }
 	Edge edge_curr() const { return {{idx, next.curr}, dur.curr, EDG_MAX}; }

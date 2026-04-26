@@ -49,9 +49,14 @@ public:
 
 	bool set_time_lb(vtx_t v, tim_t lb);
 
-	void add_edge(const Edge& e);
-	void remove_edge(const Edge& e);
-	void update_edge(const Edge& e_old, const Edge& e_new);
+	void add_edge(const Edge& x);
+	void remove_edge(const Edge& x);
+
+	void add_edges(const std::vector<Edge>& vec);
+	void remove_edges(const std::vector<Edge>& vec);
+
+	void update_edge(const Edge& x_old, const Edge& x_new);
+
 
 	void clear_edges();
 
@@ -84,14 +89,14 @@ private:
 
 	std::queue<vtx_t> queue_;
 
-	void Event_graph::add_in_entry(const Edge& x);
-	void Event_graph::add_out_entry(const Edge& x);
+	void add_in_entry(const Edge& x);
+	void add_out_entry(const Edge& x);
 
-	void Event_graph::remove_in_entry(const Edge& x);
-	void Event_graph::remove_out_entry(const Edge& x);
+	void remove_in_entry(const Edge& x);
+	void remove_out_entry(const Edge& x);
 
-	void Event_graph::update_in_entry(const Edge& x_old, const Edge& x_new);
-	void Event_graph::update_out_entry(const Edge& x_old, const Edge& x_new);
+	void update_in_entry(const Edge& x_old, const Edge& x_new);
+	void update_out_entry(const Edge& x_old, const Edge& x_new);
 
 	bool sync_dfs(vtx_t v);
 	bool sync_time_clear(vtx_t v, Flag& time_change);

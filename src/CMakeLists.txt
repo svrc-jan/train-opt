@@ -19,7 +19,7 @@ add_library(conflict_resolver conflict_resolver.cpp)
 
 target_include_directories(solver PUBLIC ${GUROBI_INC})
 target_link_libraries(solver chunk_manager route_planner conflict_resolver
-	preprocess event_graph ${GUROBI_API_LIB} ${GUROBI_BASE_LIB})
+	event_graph link_graph ${GUROBI_API_LIB} ${GUROBI_BASE_LIB})
 
 target_include_directories(chunk_manager PUBLIC ${GUROBI_INC})
 target_link_libraries(chunk_manager solver)
