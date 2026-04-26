@@ -76,6 +76,7 @@ private:
 
 	void get_op_changes();
 	void sync_chunk_mngr_state();
+	void sync_chunk_mngr_time();
 	void sync_link_graph();
 	bool sync_event_graph();
 

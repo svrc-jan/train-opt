@@ -90,10 +90,8 @@ void Chunk_manager::init_res()
 };
 
 
-void Chunk_manager::sync_state(const Flag& op_dirty, const Flag& op_active)
+void Chunk_manager::op_change(const Flag& op_dirty)
 {
-	this->state_dirty.clear();
-
 	op_dirty.get_true_list(this->slvr.list_hlpr);
 	for (auto o : this->slvr.list_hlpr) {
 		auto& op = this->prepr.ops[o];
@@ -101,6 +99,22 @@ void Chunk_manager::sync_state(const Flag& op_dirty, const Flag& op_active)
 			this->state_dirty += c;
 		}
 	}
+}
+
+void Chunk_manager::time_change(const Flag& level_time_dirty)
+{
+	level_time_dirty.get_true_list(this->slvr.list_hlpr);
+	for (auto l : this->slvr.list_hlpr) {
+		for (auto c : this->level_chunks[l]) {
+			this->time_dirty += c;
+		}
+	}
+}
+
+
+void Chunk_manager::sync_state()
+{
+	auto& op_active = this->slvr.route_plnr->op_active.curr;
 
 	this->state_dirty.get_true_list(this->slvr.list_hlpr);
 	for (auto c : this->slvr.list_hlpr) {
@@ -142,18 +156,12 @@ void Chunk_manager::sync_state(const Flag& op_dirty, const Flag& op_active)
 	}
 
 	this->time_dirty.set_true(this->state_dirty);
+	this->state_dirty.clear();
 }
 
 
-void Chunk_manager::sync_time(const Flag& level_time_dirty)
+void Chunk_manager::sync_time()
 {
-	level_time_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto l : this->slvr.list_hlpr) {
-		for (auto c : this->level_chunks[l]) {
-			this->time_dirty += c;
-		}
-	}
-
 	this->time_dirty.get_true_list(this->slvr.list_hlpr);
 	for (auto c : this->slvr.list_hlpr) {
 		auto& state = this->state[c];

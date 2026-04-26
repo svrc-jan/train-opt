@@ -27,13 +27,15 @@ Solver::~Solver()
 void Solver::plan_routes()
 {
 	this->route_plnr->get_random_ops(0.5);
-
+	
 	this->route_plnr->sync_graph();
 	bool ret = this->sync_event_graph();
+
 	assert(!ret);
 
-	this->sync_chunk_mngr_state();
 	this->sync_link_graph();
+	this->chunk_mngr->op_change(this->route_plnr->op_dirty);
+	this->chunk_mngr->sync_state();
 
 	this->route_plnr->snap_ops();
 }
@@ -41,9 +43,7 @@ void Solver::plan_routes()
 
 void Solver::solve()
 {
-	for (auto t : this->inst.trains_range()) {
-		this->resolve_conflicts(t);
-	}
+	this->resolve_conflicts(IDX_MAX);
 }
 
 
@@ -52,6 +52,7 @@ void Solver::resolve_conflicts(idx_t t)
 	while (true) {
 		this->conf_rslvr->optimize_model();
 		this->conf_rslvr->sync_graph();
+
 		bool cycle_found = this->sync_event_graph();
 		if (cycle_found) {
 			this->conf_rslvr->add_cycle_cons();
@@ -62,6 +63,9 @@ void Solver::resolve_conflicts(idx_t t)
 		if (path_added) {
 			continue;
 		}
+
+		this->chunk_mngr->sync_time();
+		this->chunk_mngr->sync_res();
 
 		bool conf_added = this->conf_rslvr->add_conflict(t);
 		if (!conf_added) {
@@ -75,15 +79,19 @@ void Solver::resolve_conflicts(idx_t t)
 bool Solver::sync_event_graph()
 {
 	auto ret = this->event_graph.sync(this->time_dirty);
-	return ret == Event_graph::CYCLE_FOUND;
+	if (ret == Event_graph::CYCLE_FOUND) {
+		return true;
+	}
+
+	this->chunk_mngr->time_change(this->time_dirty);
+
+	return false;
 }
 
 
 void Solver::sync_chunk_mngr_state()
 {
-	this->chunk_mngr->sync_state(
-		this->route_plnr->op_dirty,
-		this->route_plnr->op_active.curr);
+	this->chunk_mngr->sync_state();
 }
 
 

@@ -49,6 +49,8 @@ public:
 	template<Chain_dir chain_dir, Force_opt force=FRC_NONE>
 	void get_chain(std::set<idx_pr>& chain, const idx_pr& chunks);
 
+	void get_chain_conf(std::set<idx_pr>& chain, const idx_pr& chunks);
+
 private:
 	std::vector<Link> chunk_links = {};
 	std::vector<idx_pr> links_hlpr = {};
@@ -86,3 +88,5 @@ struct Link_graph::Chunk
 	Array<Link> fwd;
 	const Preprocess::Chunk* prepr = nullptr;
 };
+
+

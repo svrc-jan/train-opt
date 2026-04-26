@@ -51,8 +51,11 @@ public:
 
 	void init_data();
 
-	void sync_state(const Flag& op_dirty, const Flag& op_active);
-	void sync_time(const Flag& level_time_dirty);
+	void op_change(const Flag& op_dirty);
+	void time_change(const Flag& level_time_dirty);
+
+	void sync_state();
+	void sync_time();
 	void sync_res();
 
 	inline Edge get_edge(const idx_pr& chunk, edg_t e) const;

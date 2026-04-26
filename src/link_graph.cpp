@@ -223,8 +223,15 @@ size_t Link_graph::get_chain_length(idx_pr chunks,	set<idx_pr>& chain,	Flag& don
 	return chain.size();
 }
 
+
+void Link_graph::get_chain_conf(std::set<idx_pr>& chain, const idx_pr& chunks)
+{
+	this->get_chain<EITHER, FRC_NONE>(chain, chunks);
+}
+
+
 template<Link_graph::Chain_dir chain_dir, Link_graph::Force_opt force>
-void Link_graph::get_chain(std::set<idx_pr>& chain, const idx_pr& chunks)
+void Link_graph::get_chain(set<idx_pr>& chain, const idx_pr& chunks)
 {
 	chain.clear();
 	chain.insert(chunks);

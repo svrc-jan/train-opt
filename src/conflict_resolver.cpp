@@ -67,10 +67,10 @@ bool Conflict_resolver::add_conflict(idx_t train)
 	assert(is_chunk_active[chunk.first] && is_chunk_active[chunk.second]);
 
 
-	bool default_val = true;
+	bool default_val = false;
 	if (chunk.first > chunk.second) {
 		swap(chunk.first, chunk.second);
-		default_val = false;
+		default_val = true;
 	}
 
 	size_t idx = this->confs.size();
@@ -82,7 +82,8 @@ bool Conflict_resolver::add_conflict(idx_t train)
 	assert(t1 != t2);
 	assert(train == IDX_MAX || t1 == train || t2 == train);
 
-	this->slvr.link_graph.get_chain<Link_graph::EITHER>(this->conf_chain, chunk);
+	this->slvr.link_graph.get_chain_conf(this->conf_chain, chunk);
+
 
 	Conflict conf;
 	conf.idx = (idx_t)idx;
@@ -90,12 +91,16 @@ bool Conflict_resolver::add_conflict(idx_t train)
 	conf.value = {default_val};
 	conf.var = this->model.addVar(0, 1, 0, GRB_BINARY, format("conf_{}", idx));
 
+	for (auto& x : this->conf_chain) {
+		conf.chunks.push_back(x);
+	}
+
 	this->confs.push_back(conf);
 
 	cout << "conflict idx: " << conf.idx << 
 		", trains: (" << t1 << ", " << t2 <<
 		"), time: " << min_time << 
-		", chunks:" << conf.chunks << endl;
+		", chunks: " << conf.chunks << endl;
 
 	return true;
 }

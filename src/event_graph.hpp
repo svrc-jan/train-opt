@@ -149,3 +149,4 @@ struct Event_graph::Vertex_edge
 	Vertex_edge(vtx_t v, edg_t e) : v(v), e(e) {}
 	Vertex_edge(const Edge_entry& x) : v(x.v), e(x.e) {}
 };
+
