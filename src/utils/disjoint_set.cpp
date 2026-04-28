@@ -45,23 +45,21 @@ Disjoint_set::idx_t Disjoint_set::find_set(idx_t v) const
 		this->parent[v] = this->parent[this->parent[v]];
 		v = this->parent[v];
 	}
-
 	return v;
 }
 
 
-void Disjoint_set::union_set(idx_t a, idx_t b)
+void Disjoint_set::union_set(idx_t u, idx_t v)
 {
-	a = find_set(a);
-	b = find_set(b);
-	if (a != b) {
-		if (size[a] < size[b]) {
-			std::swap(a, b);
+	u = find_set(u);
+	v = find_set(v);
+	if (u != v) {
+		if (size[u] < size[v]) {
+			std::swap(u, v);
 		}
 
-		this->parent[b] = a;
-		this->size[a] += this->size[b];
-
+		this->parent[v] = u;
+		this->size[u] += this->size[v];
 		this->n_sets -= 1;
 	}
 }
