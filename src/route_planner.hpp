@@ -5,9 +5,14 @@
 #include "utils/tracked.hpp"
 #include "instance.hpp"
 #include "preprocess.hpp"
-#include "solver.hpp"
+#include "link_graph.hpp"
+#include "chunk_manager.hpp"
 
-class Solver;
+
+#ifndef GBR_EXCEPTION
+#define GBR_EXCEPTION 20
+#endif
+
 
 class Route_planner
 {
@@ -19,55 +24,49 @@ public:
 	typedef Instance::idx_t idx_t;
 	typedef Instance::dur_t dur_t;
 	typedef Instance::tim_t tim_t;
-
-	typedef Event_graph::edg_t edg_t; 
-	typedef Event_graph::vtx_t vtx_t; 
-	typedef Event_graph::Edge Edge;
+	typedef Preprocess::idx_pr idx_pr;
 
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
 	static constexpr tim_t TIM_MAX = Instance::TIM_MAX;
 
-	static constexpr edg_t EDG_MAX = Event_graph::EDG_MAX;
-	static constexpr vtx_t VTX_MAX = Event_graph::VTX_MAX;
-
 	const Instance& inst;
 	const Preprocess& prepr;
 
-	Tracked<Flag> op_active;
-	Flag op_dirty;
-
-	std::vector<Tracked<idx_t>> op_succ = {};
-	std::vector<Level> levels = {};
+	Batch<idx_t, int16_t> op_change;
+	Batch<idx_pr, int16_t> op_succ_change;
+	Batch<idx_t, tim_t> level_time_change;
 
 
-	Route_planner(Solver& sovler);
+	Route_planner(const Preprocess& prepr, Link_graph& link_graph, 
+		Chunk_manager& chunk_mrng, GRBEnv& grb_env);
 	~Route_planner();
 
-	void init_data();
-	void sync_graph();
-
-	void get_random_ops(double dur_stretch=0.0);
-	void snap_ops();
+	void make_init_routes();
+	void optimize_routes();
 
 private:
 	struct Flow_cons;
 	
-	Solver& slvr;
+	Link_graph& link_graph;
+	Chunk_manager& chunk_mngr;
 	GRBModel model;
 
-	double init_dur_stretch = 0.5;
-
+	std::vector<Op> ops = {};
+	std::vector<Level> levels = {};
 	std::vector<Route> routes = {};
+
 	std::vector<GRBConstr> flow_constr = {};
-	std::set<idx_t> assign_random_route_set = {};
 
 	std::vector<double> chunk_price = {};
 
-	void init_ops();
-	void init_levels();
-	void init_routes();
-	void init_model();
+	void get_random_routes();
+	void update_route_ops();
+	void update_level_time(idx_t t);
+
+	void sync_extern();
+	void get_op_changes();
+	void get_time_changes();
 
 	void find_req_routes();
 	void add_route_vars();
@@ -78,42 +77,41 @@ private:
 	void freeze_all();
 	void unfreeze_all();
 
-	void freeze_train(idx_t t);
-	void unfreeze_train(idx_t t);
+	void init_data();
+	void init_ops();
+	void init_levels();
+	void init_routes();
+	void init_chunks();
+	void init_model();
 };
 
 
 struct Route_planner::Op
 {
-	Tracked<idx_t> succ = {IDX_MAX};
+	Tracked<int8_t> active = {0, 0};
+	Tracked<idx_t> succ = {IDX_MAX, IDX_MAX};
 	const Preprocess::Op* prepr = nullptr;
 };
 
 
-
 struct Route_planner::Level
 {
-	idx_t idx = IDX_MAX;
-	Tracked<idx_t> next = {IDX_MAX};
-	Tracked<dur_t> dur = {0};
-	Tracked<tim_t> lb = {IDX_MAX};
-
-	void stretch_dur(double by) { dur = (dur_t)MIN((double)DUR_MAX, round(dur*(1 + by))); }
-
-	Edge edge_old() const { return {{idx, next.old}, dur.old, EDG_MAX}; }
-	Edge edge_curr() const { return {{idx, next.curr}, dur.curr, EDG_MAX}; }
+	idx_t next = IDX_MAX;
+	dur_t dur = 0;
+	tim_t lb = 0;
+	Tracked<tim_t> time = {0, 0};
 };
 
 
 struct Route_planner::Route
 {
-	Tracked<int8_t> value = {0};
-	int8_t is_req = 0;
-	int8_t is_frozen = 0;
+	Tracked<int8_t> active = {0, 0};
+	int8_t required = 0;
+	int8_t frozen = 0;
 	GRBVar var;
 	const Preprocess::Route* prepr = nullptr;
 
-	GRBLinExpr to_expr() const { return (is_req ? 1 : GRBLinExpr(var)); }
+	GRBLinExpr to_expr() const { return (required ? 1 : GRBLinExpr(var)); }
 	void freeze();
 	void unfreeze();
 };

@@ -8,10 +8,10 @@
 using namespace std;
 
 
-Chunk_manager::Chunk_manager(Solver& solver)
-	: inst(solver.inst), prepr(solver.prepr), slvr(solver)
+Chunk_manager::Chunk_manager(const Preprocess& prepr)
+	: inst(prepr.inst), prepr(prepr)
 {
-	
+	this->init_data();
 }
 
 
@@ -23,14 +23,22 @@ Chunk_manager::~Chunk_manager()
 
 void Chunk_manager::init_data()
 {
+	this->init_ops();
 	this->init_levels();
 	this->init_chunks();
 	this->init_res();
 }
 
 
+void Chunk_manager::init_ops()
+{
+	this->op_active.set_n_items(this->inst.n_ops());
+}
+
+
 void Chunk_manager::init_levels()
 {
+	this->level_time.resize(this->prepr.n_levels(), 0);
 	this->level_chunks.resize(this->prepr.n_levels());
 }
 
@@ -90,23 +98,40 @@ void Chunk_manager::init_res()
 };
 
 
-void Chunk_manager::op_change(const Flag& op_dirty)
+void Chunk_manager::op_change(const Batch<idx_t, int16_t>& op_change)
 {
-	op_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto o : this->slvr.list_hlpr) {
-		auto& op = this->prepr.ops[o];
-		for (auto c : op.chunks) {
-			this->state_dirty += c;
+	for (auto x : op_change) {
+		bool changed = false;
+		if (x.value < 0) {
+			if (this->op_active[x.idx]) {
+				this->op_active -= x.idx;
+				changed = true;
+			}
+		}
+		else if (x.value > 0) {
+			if (!this->op_active[x.idx]) {
+				this->op_active += x.idx;
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			for (auto c : this->prepr.ops[x.idx].chunks) {
+				this->state_dirty += c;
+			}
 		}
 	}
 }
 
-void Chunk_manager::time_change(const Flag& level_time_dirty)
+void Chunk_manager::time_change(const Batch<idx_t, tim_t>& level_time_change)
 {
-	level_time_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto l : this->slvr.list_hlpr) {
-		for (auto c : this->level_chunks[l]) {
-			this->time_dirty += c;
+	for (auto x : level_time_change) {
+		if (this->level_time[x.idx] != x.value) {
+			this->level_time[x.idx] = x.value;
+
+			for (auto c : this->level_chunks[x.idx]) {
+				this->time_dirty += c;
+			}
 		}
 	}
 }
@@ -114,15 +139,12 @@ void Chunk_manager::time_change(const Flag& level_time_dirty)
 
 void Chunk_manager::sync_state()
 {
-	auto& op_active = this->slvr.route_plnr->op_active.curr;
-
-	this->state_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto c : this->slvr.list_hlpr) {
+	this->state_dirty.get_true_list(this->list_hlpr);
+	for (auto c : this->list_hlpr) {
 		auto& chunk = this->prepr.chunks[c];
 		
-		State new_state = {{IDX_MAX, IDX_MAX}, 0};
-
 		this->is_active -= c;
+		State new_state = {{IDX_MAX, IDX_MAX}, 0};
 
 		for (auto o : chunk.ops) {
 			if (!op_active[o]) {
@@ -130,7 +152,6 @@ void Chunk_manager::sync_state()
 			}
 
 			this->is_active += c;
-
 			auto& op = this->prepr.ops[o];
 			
 			new_state.level.start = (new_state.level.start == IDX_MAX) ? 
@@ -139,9 +160,6 @@ void Chunk_manager::sync_state()
 			new_state.level.end = op.level.end;
 			new_state.dur = op.inst->res.find_asc(chunk.res)->dur;
 		}
-
-		assert(new_state.level.start < this->prepr.n_levels());
-		assert(new_state.level.end < this->prepr.n_levels());
 
 		auto& state = this->state[c];
 		if (state != new_state) {
@@ -162,16 +180,16 @@ void Chunk_manager::sync_state()
 
 void Chunk_manager::sync_time()
 {
-	this->time_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto c : this->slvr.list_hlpr) {
+	this->time_dirty.get_true_list(this->list_hlpr);
+	for (auto c : this->list_hlpr) {
 		auto& state = this->state[c];
 		auto& time = this->time[c];
 
 		Interval<tim_t> new_time;
 
 		if (this->is_active[c]) {
-			new_time.start = this->slvr.time(state.level.start);
-			new_time.end = this->slvr.time(state.level.end) + state.dur;
+			new_time.start = this->level_time[state.level.start];
+			new_time.end = this->level_time[state.level.end] + state.dur;
 		}
 		else {
 			new_time = {TIM_MAX, TIM_MAX};
@@ -184,6 +202,7 @@ void Chunk_manager::sync_time()
 	}
 
 	this->time_dirty.clear();
+	this->sync_res();
 }
 
 
@@ -191,10 +210,9 @@ void Chunk_manager::sync_res()
 {
 	auto time_cmp = Time_cmp(this->time);
 
-	this->res_dirty.get_true_list(this->slvr.list_hlpr);
-	for (auto r : this->slvr.list_hlpr) {
+	this->res_dirty.get_true_list(this->list_hlpr);
+	for (auto r : this->list_hlpr) {
 		auto& res = this->res[r];
-
 		sort(res.chunks, &res.chunks[res.size], time_cmp);
 	}
 

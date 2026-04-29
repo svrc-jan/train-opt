@@ -10,7 +10,6 @@ struct Tracked
 	Tracked(const T& x) : curr(x), old(x) {}
 	Tracked(const T& curr, const T& old) : curr(curr), old(old) {}
 
-	inline T get_change() {}
 	inline void snap() { old = curr; }
 	inline T get_change() const { return curr - old; }
 	inline bool changed() const { return curr != old; }

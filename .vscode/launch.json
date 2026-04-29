@@ -35,7 +35,7 @@
 			"command": "extension.commandvariable.file.pickFile",
 			"args" : {
 				"description" : "Select instance",
-				"include" : "data/*.json",
+				"include" : "data/*/*.json",
 				"display" : "fileName",
 				"addEmpty" : true
 			}

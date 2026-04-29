@@ -5,10 +5,12 @@
 using namespace std;
 
 
-Route_planner::Route_planner(Solver& solver)
-	: inst(solver.inst), prepr(solver.prepr), slvr(solver), model(GRBModel(solver.grb_env))
+Route_planner::Route_planner(const Preprocess& prepr, Link_graph& link_graph, 
+	Chunk_manager& chunk_mngr, GRBEnv& grb_env)
+	: inst(prepr.inst), prepr(prepr), link_graph(link_graph), 
+	  chunk_mngr(chunk_mngr), model(GRBModel(grb_env))
 {
-
+	this->init_data();
 }
 
 
@@ -18,69 +20,146 @@ Route_planner::~Route_planner()
 }
 
 
-void Route_planner::get_random_ops(double dur_stretch)
+void Route_planner::make_init_routes()
 {
-	this->op_active.curr.clear();
-	for (auto& x : this->op_succ) {
-		x = IDX_MAX;
+	this->get_random_routes();
+	this->update_route_ops();
+	this->sync_extern();
+}
+
+
+void Route_planner::optimize_routes()
+{
+	
+}
+
+
+void Route_planner::update_route_ops()
+{
+	for (auto& route : this->routes) {
+		if (!route.active.changed()) {
+			continue;
+		}
+
+		if (route.active.old) {
+			for (auto o : route.prepr->ops) {
+				this->ops[o].active.curr = false;
+			}
+		}
+
+		if (route.active.curr) {
+			for (auto o : route.prepr->ops) {
+				this->ops[o].active.curr = true;
+			}
+		}
 	}
 
-	for (auto& level : this->levels) {
-		level.next = IDX_MAX;
+	for (auto& op : this->ops) {
+		if (op.active) {
+			for (auto s : op.prepr->inst->succ) {
+				if (this->ops[s].active.curr) {
+					op.succ.curr = s;
+					break;
+				}
+			}
+		}
+		else {
+			op.succ.curr = IDX_MAX;
+		}
 	}
+}
 
+
+void Route_planner::get_random_routes()
+{
+	for (auto& route : this->routes) {
+		route.active.curr = false;
+	}
 
 	for (auto& train : this->inst.trains) {
 		auto o = train.op_first;
 
 		while (true) {
 			auto& op = this->prepr.ops[o];
-			this->op_active.curr += o;
-			
-			auto& level = this->levels[op.level.start];
-			level.next = op.level.end;
-			level.dur = op.inst->dur;
-			level.lb = op.inst->start_lb;
-			if (dur_stretch > 0.0) {
-				level.stretch_dur(dur_stretch);
-			}
+			this->routes[op.route].active.curr = true;
+
 
 			if (op.inst->succ.size() == 0) { break ; }
 			auto s = op.inst->succ.get_random_item();
 
-			this->op_succ[o] = s;
 			o = s;
 		}
 	}
-
-	this->op_dirty = this->op_active.old;
-	this->op_dirty ^= this->op_active.curr;
 }
 
 
-void Route_planner::snap_ops()
+void Route_planner::update_level_time(idx_t l_start)
 {
-	this->op_active.snap();
-	this->op_dirty.clear();
+	idx_t l = l_start;
+	while (true) {
+		auto& level = this->levels[l];
+		level.time.curr = MAX(level.time.curr, level.lb);
 
-	for (auto& x : this->op_succ) {
-		x.snap();	
+		if (level.next == IDX_MAX) {
+			break;
+		}
+
+		auto& level_next = this->levels[level.next];
+		level_next.time.curr = level.time.curr + (tim_t)level.dur;
+
+		l = level.next;
 	}
 }
 
-void Route_planner::sync_graph()
+
+void Route_planner::sync_extern()
 {
-	for (auto& level : this->levels) {
-		if (level.lb.changed()) {
-			this->slvr.event_graph.set_time_lb(level.idx, level.lb.curr);
-			level.lb.snap();
+	this->op_change.clear();
+	this->op_succ_change.clear();
+
+	this->get_op_changes();
+	this->link_graph.op_change(this->op_change, this->op_succ_change);
+	this->link_graph.sync();
+	this->chunk_mngr.op_change(this->op_change);
+	this->chunk_mngr.sync_state();
+
+	this->level_time_change.clear();
+	this->get_time_changes();
+	this->chunk_mngr.time_change(this->level_time_change);
+}
+
+
+void Route_planner::get_op_changes()
+{
+	for (auto o : this->inst.ops_range()) {
+		auto& op = this->ops[o];
+		if (op.active.changed()) {
+			this->op_change.push_back({o, op.active.get_change()});
+			op.active.snap();
 		}
-		
-		if (level.next.changed() || level.dur.changed()) {
-			this->slvr.event_graph.update_edge(level.edge_old(), level.edge_curr());
-			level.next.snap();
-			level.dur.snap();
+
+		if (op.succ.changed()) {
+			if (op.succ.old < IDX_MAX) {
+				this->op_succ_change -= {o, op.succ.old};
+			}
+			if (op.succ.curr < IDX_MAX) {
+				this->op_succ_change += {o, op.succ.curr};
+			}
+
+			op.succ.snap();
 		}
+	}
+}
+
+
+void Route_planner::get_time_changes()
+{
+	for (auto l : this->prepr.levels_range()) {
+		auto& level = this->levels[l];
+		if (level.time.changed()) {
+			this->level_time_change.push_back({l, level.time.curr});
+			level.time.snap();
+		};
 	}
 }
 
@@ -119,66 +198,15 @@ bool Route_planner::optimize_model()
 }
 
 
-void Route_planner::init_data()
-{
-	this->init_ops();
-	this->init_levels();
-	this->init_routes();
-	this->init_model();
-}
-
-
-
-void Route_planner::init_model()
-{
-	this->model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-	this->find_req_routes();
-	this->add_route_vars();
-	this->add_flow_constr();
-}
-
-
-void Route_planner::init_ops()
-{
-	size_t n_ops = this->inst.n_ops();
-
-	this->op_active.curr.set_n_items(n_ops);
-	this->op_active.snap();
-	this->op_dirty.set_n_items(n_ops);
-
-	this->op_succ.resize(n_ops, {IDX_MAX, IDX_MAX});
-}
-
-void Route_planner::init_levels()
-{
-	this->levels.resize(this->prepr.n_levels());
-	for (auto l : this->prepr.levels_range()) {
-		this->levels[l].idx = l;
-	}
-}
-
-
-void Route_planner::init_routes()
-{
-	size_t n_routes = this->prepr.n_routes();
-
-	this->routes.resize(n_routes);
-	
-	for (auto& route : this->prepr.routes) {
-		this->routes[route.idx].prepr = &route;
-	}
-}
-
-
 void Route_planner::find_req_routes()
 {
 	for (auto& route : this->routes) {
-		route.is_req = 0;
+		route.required = 0;
 	}
 
 	for (auto& sect : this->prepr.sects) {
 		if (sect.routes.size() == 1) {
-			this->routes[sect.routes[0]].is_req = 1;
+			this->routes[sect.routes[0]].required = 1;
 		}
 	}
 }
@@ -187,7 +215,7 @@ void Route_planner::find_req_routes()
 void Route_planner::add_route_vars()
 {
 	for (auto& route : this->routes) {
-		if (route.is_req) {
+		if (route.required) {
 			continue;
 		}
 
@@ -240,42 +268,87 @@ void Route_planner::unfreeze_all()
 }
 
 
-void Route_planner::freeze_train(idx_t t)
+void Route_planner::init_data()
 {
-	for (auto& route : this->prepr.trains[t].routes) {
-		this->routes[route.idx].freeze();
+	this->init_ops();
+	this->init_levels();
+	this->init_routes();
+	this->init_chunks();
+
+	this->init_model();
+}
+
+
+void Route_planner::init_model()
+{
+	this->model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+	this->find_req_routes();
+	this->add_route_vars();
+	this->add_flow_constr();
+}
+
+
+void Route_planner::init_ops()
+{
+	this->ops.resize(this->inst.n_ops());
+	for (auto o : this->inst.ops) {
+		this->ops[o].prepr = &this->prepr.ops[o];
 	}
 }
 
-void Route_planner::unfreeze_train(idx_t t)
+void Route_planner::init_levels()
 {
-	for (auto& route : this->prepr.trains[t].routes) {
-		this->routes[route.idx].unfreeze();
+	this->levels.resize(this->prepr.n_levels());
+}
+
+
+void Route_planner::init_routes()
+{
+	size_t n_routes = this->prepr.n_routes();
+
+	this->routes.resize(n_routes);
+	
+	for (auto r : this->prepr.routes_range()) {
+		auto& route = this->routes[r];
+		// route.idx = r;
+		route.prepr = &this->prepr.routes[r];
 	}
+}
+
+
+void Route_planner::init_chunks()
+{
+	this->chunk_price.resize(this->prepr.n_chunks());
 }
 
 
 void Route_planner::Route::freeze()
 {
-	if (this->is_req) {
+	if (this->required || this->frozen) {
 		return;
 	}
 
-	this->var.set(GRB_DoubleAttr_LB, (double)this->value);
-	this->var.set(GRB_DoubleAttr_UB, (double)this->value);
-	this->is_frozen = true;
+	if (this->active.curr) {
+		this->var.set(GRB_DoubleAttr_LB, 1.0);
+	}
+	else {
+		this->var.set(GRB_DoubleAttr_UB, 0.0);
+	}
+	
+	this->frozen = true;
 }
 
 
 void Route_planner::Route::unfreeze()
 {
-	if (this->is_req) {
+	if (this->required || !this->frozen) {
 		return;
 	}
 
 	this->var.set(GRB_DoubleAttr_LB, 0.0);
 	this->var.set(GRB_DoubleAttr_UB, 1.0);
-	this->is_frozen = true;
+
+	this->frozen = false;
 }
 
 

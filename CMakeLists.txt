@@ -46,8 +46,8 @@ add_subdirectory(src)
 add_executable(instance_test apps/instance_test.cpp)
 target_link_libraries(instance_test instance)
 
-add_executable(preprocess_test apps/preprocess_test.cpp)
-target_link_libraries(preprocess_test preprocess)
+add_executable(preprocess_stats apps/preprocess_stats.cpp)
+target_link_libraries(preprocess_stats preprocess)
 
 add_executable(graph_test apps/graph_test.cpp)
 target_link_libraries(graph_test event_graph)
@@ -58,5 +58,5 @@ target_link_libraries(link_test link_graph)
 add_executable(solver_test apps/solver_test.cpp)
 target_link_libraries(solver_test solver)
 
-add_executable(flag_test apps/flag_test.cpp)
-target_link_libraries(flag_test flag)
+add_executable(route_test apps/route_test.cpp)
+target_link_libraries(route_test route_planner)

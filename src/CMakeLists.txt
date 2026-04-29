@@ -12,19 +12,9 @@ target_link_libraries(link_graph preprocess)
 add_library(event_graph event_graph.cpp)
 target_link_libraries(event_graph flag)
 
-add_library(solver solver.cpp)
 add_library(chunk_manager chunk_manager.cpp)
+target_link_libraries(chunk_manager preprocess)
+
 add_library(route_planner route_planner.cpp)
-add_library(conflict_resolver conflict_resolver.cpp)
-
-target_link_libraries(chunk_manager solver)
-
 target_include_directories(route_planner PUBLIC ${GUROBI_INC})
-target_link_libraries(route_planner solver)
-
-target_include_directories(conflict_resolver PUBLIC ${GUROBI_INC})
-target_link_libraries(conflict_resolver link_graph solver)
-
-target_include_directories(solver PUBLIC ${GUROBI_INC})
-target_link_libraries(solver event_graph link_graph chunk_manager 
-	route_planner conflict_resolver ${GUROBI_API_LIB} ${GUROBI_BASE_LIB})
+target_link_libraries(route_planner chunk_manager link_graph ${GUROBI_API_LIB} ${GUROBI_BASE_LIB})

@@ -26,24 +26,26 @@ Link_graph::~Link_graph()
 }
 
 
-void Link_graph::sync(const Batch<idx_t, int8_t>& op_change, const Batch<idx_pr, int8_t> op_succ_change)
+void Link_graph::op_change(const Batch<idx_t, int16_t>& op_change, const Batch<idx_pr, int16_t>& op_succ_change)
 {
-	this->links_change.clear();
-
 	for (auto o : op_change) {
 		this->prepr.get_op_links(this->links_hlpr, o.idx);
 		for (auto x : this->links_hlpr) {
-			this->links_change.push_back({x, o.count});
+			this->links_change.push_back({x, o.value});
 		}
 	}
 
 	for (auto& o_s : op_succ_change) {
 		this->prepr.get_op_succ_links(this->links_hlpr, o_s.idx);
 		for (auto x : this->links_hlpr) {
-			this->links_change.push_back({x, o_s.count});
+			this->links_change.push_back({x, o_s.value});
 		}
 	}
+}
 
+
+void Link_graph::sync()
+{
 	this->links_change.aggregate();
 	for (auto& x : this->links_change) {
 		assert(x.idx.first != x.idx.second);
@@ -52,9 +54,10 @@ void Link_graph::sync(const Batch<idx_t, int8_t>& op_change, const Batch<idx_pr,
 }
 
 
-void Link_graph::update_link(const Batch<idx_pr, int8_t>::Item& item)
+
+void Link_graph::update_link(const Batch<idx_pr, int16_t>::Item& item)
 {
-	if (item.count == 0) {
+	if (item.value == 0) {
 		return;
 	}
 
@@ -67,10 +70,10 @@ void Link_graph::update_link(const Batch<idx_pr, int8_t>::Item& item)
 
 	assert(lnk_fwd != nullptr && lnk_bkw != nullptr);
  
-	lnk_fwd->count += item.count;
-	lnk_bkw->count += item.count;
+	lnk_fwd->count += item.value;
+	lnk_bkw->count += item.value;
 
-	assert(lnk_fwd->count.curr >= 0 && lnk_bkw->count.curr >= 0);
+	assert(lnk_fwd->count >= 0 && lnk_bkw->count >= 0);
 }
 
 void Link_graph::make_chunks()
@@ -132,6 +135,7 @@ void Link_graph::make_links()
 	}
 	assert(2*link_idx == this->chunk_links.size());
 }
+
 
 
 void Link_graph::print_chains(bool force)

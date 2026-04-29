@@ -23,8 +23,9 @@ public:
 	class Paths;
 
 	typedef uint16_t idx_t;
-	typedef uint32_t tim_t;
 	typedef uint16_t dur_t;
+	typedef uint32_t tim_t;
+	
 
 	static const idx_t IDX_MAX = std::numeric_limits<idx_t>::max();
 	static const dur_t DUR_MAX = std::numeric_limits<dur_t>::max();

@@ -81,12 +81,18 @@ public:
 	METHOD_RANGE(chunks, idx_t)
 	METHOD_RANGE(objs, idx_t)
 	METHOD_RANGE(trains, idx_t)
+
+	inline size_t n_opt_levels() const;
+	inline size_t n_inva_junct() const;
+
+
 	
 private:
 	enum Chunk_conn { INVALID, DIRECT, PARALLEL };
 
 	std::vector<Junct_edge> junct_succ = {};
 	std::vector<Junct_edge> junct_pred = {};
+	std::vector<idx_pr> junct_inva_trans = {};
 
 	std::vector<idx_t>  	level_juncts = {};
 	std::vector<Level_edge> level_succ = {};
@@ -117,6 +123,7 @@ private:
 	void verify_juncts() const;
 	void verify_levels() const;
 
+	void make_invalid_transitions();
 	void make_req_levels();
 	void make_req_ops();
 
@@ -131,8 +138,6 @@ private:
 	void verify_chunks();
 
 	void make_objs();
-
-	inline size_t n_opt_levels() const;
 
 	bool ops_reachable(const std::vector<idx_t>& vec_from, const std::vector<idx_t>& vec_to);
 };
@@ -163,6 +168,7 @@ struct Preprocess::Junction
 
 	Array<Junct_edge> succ;
 	Array<Junct_edge> pred;
+	Array<idx_pr> inva_trans;
 
 	METHOD_N(succ);
 	METHOD_N(pred);
@@ -318,3 +324,12 @@ size_t Preprocess::n_opt_levels() const
 	return count;
 }
 
+
+size_t Preprocess::n_inva_junct() const
+{
+	size_t count = 0;
+	for (auto& junct : this->juncts) {
+		count += (junct.inva_trans.size() > 0);
+	}
+	return count;
+}

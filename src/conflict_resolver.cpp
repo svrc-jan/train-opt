@@ -96,7 +96,7 @@ void Conflict_resolver::add_conflict(idx_pr chunk)
 	assert(chunk.first < this->prepr.n_chunks());
 	assert(chunk.second < this->prepr.n_chunks());
 	
-	auto& is_chunk_active = this->slvr.chunk_mngr->is_active;
+	auto& is_chunk_active = this->slvr.chunk_mngr->chunk_active;
 	assert(is_chunk_active[chunk.first] && is_chunk_active[chunk.second]);
 
 	bool default_val = false;

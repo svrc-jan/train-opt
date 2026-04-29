@@ -18,7 +18,12 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 	cout << "Preprocess" << endl;
 	
 	this->make_junctions();
+	this->make_invalid_transitions();
 	cout << "  juncts:  " << this->n_juncts() << endl;
+	size_t n_inva_junct = this->n_inva_junct();
+	if (n_inva_junct > 0) {
+		cout << "    inva tra: " << n_inva_junct << endl;
+	}
 
 	this->make_levels();
 	cout << "  levels:  " << this->n_levels() << endl;
@@ -385,6 +390,41 @@ void Preprocess::make_req_ops()
 	this->ops_req.clear();
 	for (auto  o : this->is_op_req.get_true_list()) {
 		this->ops_req.push_back(o);
+	}
+}
+
+
+void Preprocess::make_invalid_transitions()
+{
+	set<idx_pr> inva_trans;
+	for (auto& junct : this->juncts) {
+		inva_trans.clear();
+		
+		for (auto& p : junct.pred) {
+			auto& op_p = this->inst.ops[p.op];
+			for (auto& s : junct.succ) {
+				auto& op_s = this->inst.ops[s.op];
+
+				if (op_p.succ.find_asc(s.op) == nullptr) {
+					inva_trans.insert({p.op, s.op});
+				}
+
+				if (op_s.pred.find_asc(p.op) == nullptr) {
+					inva_trans.insert({p.op, s.op});
+				}
+			}
+		}
+
+		for (auto x : inva_trans) {
+			junct.inva_trans.increment_size(1);
+			this->junct_inva_trans.push_back(x);
+		}
+	}
+
+
+	size_t idx = 0;
+	for (auto& junct : this->juncts) {
+		junct.inva_trans.assign_offset(this->junct_inva_trans, idx, false);
 	}
 }
 
