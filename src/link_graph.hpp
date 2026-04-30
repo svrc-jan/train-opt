@@ -1,6 +1,6 @@
 #pragma once
 
-#include <set>
+#include <unordered_map>
 #include <limits>
 
 #include "utils/flag.hpp"
@@ -9,16 +9,17 @@
 
 #include "preprocess.hpp"
 
+#define CONF_IDX(a, b) (a < b) ? (((lnk_t)a << 16) | (lnk_t)b) : (((lnk_t)b << 16) | (lnk_t)a)
+
 
 class Link_graph
 {
 public:
-	enum Link_dir {FORWARD, BACKWARD};
-	enum Chain_dir {PARALLEL, OPPOSITE, EITHER};
-	enum Force_opt {FRC_NONE, FRC_FIRST, FRC_SECOND, FRC_BOTH};
 
 	struct Chunk;
 	struct Link;
+	struct Conflict;
+	struct Conf_link;
 
 	const Instance& inst;
 	const Preprocess& prepr;
@@ -27,65 +28,96 @@ public:
 	typedef Preprocess::idx_pr idx_pr;
 	typedef uint32_t lnk_t;
 
-	Batch<idx_pr, int16_t> links_change;
-
 	static constexpr idx_t IDX_MAX = Instance::IDX_MAX;
+	static constexpr lnk_t CNF_MAX = std::numeric_limits<lnk_t>::max();
 
 	std::vector<Chunk> chunks = {};
+	std::vector<Conflict> confs = {};
 
-	Link_graph(const Preprocess& prepr);
+	std::vector<uint8_t> chunk_max_chain = {};
+	std::vector<uint8_t> conf_chain_len = {};
+
+	Link_graph(const Preprocess& prepr, bool verify=false);
 	~Link_graph();
 
-	void op_change(const Batch<idx_t, int16_t>& op_change, const Batch<idx_pr, int16_t>& op_succ_change);
-	void sync();
+	void op_change(const Flag& op_change_flag);
+	void sync_links(const Flag& op_active);
 
-	void print_chains(bool force=false);
-	
-	template<Chain_dir chain_dir=EITHER, Force_opt force=FRC_NONE>
-	size_t get_chain_length(idx_pr chunks, std::set<idx_pr>& chain, Flag& done);
-	
-	template<Chain_dir chain_dir, Force_opt force=FRC_NONE>
-	void get_chain(std::set<idx_pr>& chain, const idx_pr& chunks);
+	void update_max_chain();
 
-	void get_chain_conf(std::set<idx_pr>& chain, const idx_pr& chunks);
-	void get_chain_route(std::set<idx_pr>& chain, const idx_pr& chunks);
+	idx_t median_chain();
 
 private:
-	std::vector<Link> chunk_links = {};
-	std::vector<idx_pr> links_hlpr = {};
-
-	void update_link(const Batch<idx_pr, int16_t>::Item& change);
 	
+	std::vector<Link> links = {};
+	std::vector<idx_pr> link_ops = {};
+	
+	std::vector<lnk_t> chunk_links = {};
+	std::vector<Array<idx_t>> op_links = {};
+	std::vector<idx_t> op_links_data = {};
+
+	std::vector<Conf_link> conf_links = {};
+	std::vector<lnk_t> chunk_confs = {};
+
+	std::unordered_map<lnk_t, lnk_t> conf_map;
+
+	Flag link_active;
+	Flag link_dirty;
+
+	Flag chunk_req;
+	Flag conf_done;
+	std::vector<lnk_t> chain;
+
+	std::vector<idx_t> flag_list;
+
 	void make_chunks();
 	void make_links();
+	void make_op_links();
+	void make_confs();
+	void make_conf_links();
+	void make_chunk_confs();
 
-	template<Chain_dir chain_dir, Force_opt force=FRC_NONE>
-	void extend_chain(std::set<idx_pr>& chain, const idx_pr& chunks);
-	
-	template<Chain_dir chain_dir, Force_opt force=FRC_NONE,
-		Link_dir first_dir, Link_dir second_dir>
-	void extend_chain_in_dir(std::set<idx_pr>& chain, const idx_pr& chunks);
+	void add_links(Chunk& chunk);
+	bool conf_has_possible_link(const idx_pr& chunk);
+	bool conf_has_possible_link_dir(const idx_pr& chunk, const std::pair<int8_t, int8_t>& fwd);
+	void add_conf_links(Conflict& conf);
+	void add_conf_links_dir(Conflict& conf, const std::pair<int8_t, int8_t>& fwd);
+
+	void verify_links();
+
+	void chain_search(lnk_t k);
 };
 
 // size_t link_chunk_size = sizeof(Link_graph::Chunk);
 
-struct Link_graph::Link
-{
-	idx_t res = IDX_MAX;
-	idx_t chunk = IDX_MAX;
-	int16_t count = 0;
-
-	inline bool operator<(idx_t x) const { return chunk < x; }
-	inline bool operator==(idx_t x) const { return chunk == x ; }
-	inline bool active() const { return count > 0; }
-};
-
 
 struct Link_graph::Chunk
 {
-	Array<Link> bkw;
-	Array<Link> fwd;
+	Array<lnk_t> fwd;
+	Array<lnk_t> bkw;
+	Array<lnk_t> confs;
 	const Preprocess::Chunk* prepr = nullptr;
 };
 
 
+struct Link_graph::Link
+{
+	idx_pr res = {IDX_MAX, IDX_MAX};
+	idx_pr chunk = {IDX_MAX, IDX_MAX};
+	Array<idx_pr> ops;
+};
+
+
+struct Link_graph::Conflict
+{
+	lnk_t idx = CNF_MAX;
+	idx_pr chunk = {IDX_MAX, IDX_MAX};
+	Array<Conf_link> links;
+};
+
+struct Link_graph::Conf_link
+{
+	lnk_t idx = CNF_MAX;
+	std::pair<lnk_t, lnk_t> link;
+	int8_t opp = 0;
+};

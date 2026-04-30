@@ -56,7 +56,8 @@ int main(int argc, char const *argv[])
 		Route_planner route_plnr(prepr, link_graph, chunk_mngr, grb_env);
 
 		route_plnr.make_init_routes();
-		link_graph.print_chains();
+		cout << "random chain median: " << link_graph.median_chain() << endl;
+		route_plnr.optimize_routes();
 	}
 
 	cout << "total entries: " << entries.size() << endl;

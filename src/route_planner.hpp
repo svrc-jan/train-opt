@@ -30,13 +30,14 @@ public:
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
 	static constexpr tim_t TIM_MAX = Instance::TIM_MAX;
 
+
+	double price_mult = 0.001;
+
+
 	const Instance& inst;
 	const Preprocess& prepr;
 
-	Batch<idx_t, int16_t> op_change;
-	Batch<idx_pr, int16_t> op_succ_change;
-	Batch<idx_t, tim_t> level_time_change;
-
+	Flag op_change;
 
 	Route_planner(const Preprocess& prepr, Link_graph& link_graph, 
 		Chunk_manager& chunk_mrng, GRBEnv& grb_env);
@@ -52,16 +53,24 @@ private:
 	Chunk_manager& chunk_mngr;
 	GRBModel model;
 
-	std::vector<Op> ops = {};
+	GRBVar obj;
+
+    Flag op_active;
+	std::vector<idx_t> flag_list = {};
+
 	std::vector<Level> levels = {};
 	std::vector<Route> routes = {};
 
 	std::vector<GRBConstr> flow_constr = {};
-
-	std::vector<double> chunk_price = {};
+	std::vector<GRBConstr> obj_constr = {};
 
 	void get_random_routes();
-	void update_route_ops();
+
+	void update_values(const std::vector<idx_t>& routes);
+	void update_ops(const std::vector<idx_t>& routes);
+	void update_price(const std::vector<idx_t>& routes);
+
+	void update_all_ops();
 	void update_level_time(idx_t t);
 
 	void sync_extern();
@@ -81,16 +90,9 @@ private:
 	void init_ops();
 	void init_levels();
 	void init_routes();
-	void init_chunks();
 	void init_model();
-};
 
-
-struct Route_planner::Op
-{
-	Tracked<int8_t> active = {0, 0};
-	Tracked<idx_t> succ = {IDX_MAX, IDX_MAX};
-	const Preprocess::Op* prepr = nullptr;
+	size_t get_max_chain(const Preprocess::Section& sect);
 };
 
 
@@ -108,6 +110,7 @@ struct Route_planner::Route
 	Tracked<int8_t> active = {0, 0};
 	int8_t required = 0;
 	int8_t frozen = 0;
+	double price = 0.0;
 	GRBVar var;
 	const Preprocess::Route* prepr = nullptr;
 

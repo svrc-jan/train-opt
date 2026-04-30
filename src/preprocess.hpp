@@ -75,9 +75,10 @@ public:
 	
 
 	METHOD_RANGE(ops, idx_t)
-	METHOD_RANGE(routes, idx_t)
 	METHOD_RANGE(juncts, idx_t)
 	METHOD_RANGE(levels, idx_t)
+	METHOD_RANGE(routes, idx_t)
+	METHOD_RANGE(sects, idx_t)
 	METHOD_RANGE(chunks, idx_t)
 	METHOD_RANGE(objs, idx_t)
 	METHOD_RANGE(trains, idx_t)
@@ -214,6 +215,8 @@ struct Preprocess::Section
 	uint8_t is_single_route = false;
 	Interval<idx_t> level = {IDX_MAX, IDX_MAX};
 	Array<idx_t> routes;
+
+	METHOD_N(routes);
 };
 
 

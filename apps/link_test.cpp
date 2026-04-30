@@ -11,12 +11,15 @@ int main(int argc, char const *argv[])
 	vector<string> entries = {};
 	
 	if (argc == 1 || strlen(argv[1]) == 0) {
-		for (const auto& entry : filesystem::directory_iterator("data/")) {
-			if (entry.is_directory()) {
-				continue;
+		for (const auto& dir_entry : filesystem::directory_iterator("data/")) {
+			if (dir_entry.is_directory()) {
+				for (const auto& file_entry : filesystem::directory_iterator(dir_entry)) {
+					entries.push_back(file_entry.path());
+				}
 			}
-
-			entries.push_back(entry.path());
+			else {
+				entries.push_back(dir_entry.path());
+			}
 		}
 
 		sort(entries.begin(), entries.end());
@@ -24,37 +27,18 @@ int main(int argc, char const *argv[])
 		for (auto& entry : entries) {
 			cout << entry << endl;
 			Instance inst(entry);
-			Preprocess prepr(inst, true);
-			Link_graph link_graph(prepr);
+			Preprocess prepr(inst);
+			Link_graph link_graph(prepr, true);
 		}
+
 	}
 	else {
-
-		cout << argv[1] << endl;
 		Instance inst(argv[1]);
-		Preprocess prepr(inst, true);
-		Link_graph link_graph(prepr);
-
-		Batch<Link_graph::idx_t, int8_t> op_batch;
-		Batch<Link_graph::idx_pr, int8_t> op_succ_batch;
-
-		for (auto& train : inst.trains) {
-			auto o = train.op_first;
-			while (true) {
-				auto& op = inst.ops[o];
-				op_batch += o;
-
-				if (op.n_succ() == 0) { break ; }
-				auto s = op.succ.get_random_item();
-				
-				op_succ_batch += {o, s};
-				o = s;
-			}
-		}
-
-		link_graph.sync(op_batch, op_succ_batch);
-		link_graph.print_chains(false);
+		Preprocess prepr(inst);
+		Link_graph link_graph(prepr, true);
 	}
+
+	
 
 	return 0;
 }
