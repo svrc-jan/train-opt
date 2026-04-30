@@ -50,7 +50,7 @@ int main(int argc, char const *argv[])
 		cout << entry << endl;
 		
 		Instance inst(entry);
-		Preprocess prepr(inst, true);
+		Preprocess prepr(inst);
 		Link_graph link_graph(prepr);
 		Chunk_manager chunk_mngr(prepr);
 		Route_planner route_plnr(prepr, link_graph, chunk_mngr, grb_env);

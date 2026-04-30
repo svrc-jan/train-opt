@@ -1,0 +1,337 @@
+data/nor1/nor1_critical_0.json
+random cost: 3678
+optimize cost: 294
+data/nor1/nor1_critical_1.json
+random cost: 3432
+optimize cost: 342
+data/nor1/nor1_critical_2.json
+random cost: 2026
+optimize cost: 154
+data/nor1/nor1_critical_3.json
+random cost: 5334
+optimize cost: 564
+data/nor1/nor1_critical_4.json
+random cost: 456
+optimize cost: 68
+data/nor1/nor1_critical_5.json
+random cost: 1136
+optimize cost: 92
+data/nor1/nor1_critical_6.json
+random cost: 1858
+optimize cost: 266
+data/nor1/nor1_critical_7.json
+random cost: 1748
+optimize cost: 190
+data/nor1/nor1_critical_8.json
+random cost: 2720
+optimize cost: 328
+data/nor1/nor1_critical_9.json
+random cost: 2890
+optimize cost: 380
+data/nor1/nor1_full_0.json
+random cost: 59960
+optimize cost: 4628
+data/nor1/nor1_full_1.json
+random cost: 69702
+optimize cost: 4714
+data/nor1/nor1_full_2.json
+random cost: 25886
+optimize cost: 1294
+data/nor1/nor1_full_3.json
+random cost: 35554
+optimize cost: 2336
+data/nor1/nor1_full_4.json
+random cost: 66562
+optimize cost: 2940
+data/nor1/nor1_full_5.json
+random cost: 64280
+optimize cost: 3982
+data/nor1/nor1_full_6.json
+random cost: 68798
+optimize cost: 4038
+data/nor1/nor1_full_7.json
+random cost: 67442
+optimize cost: 4256
+data/nor1/nor1_full_8.json
+random cost: 94240
+optimize cost: 4628
+data/nor1/nor1_full_9.json
+random cost: 70596
+optimize cost: 4878
+data/nor2/nor2_1.json
+random cost: 16360
+optimize cost: 1180
+data/nor2/nor2_2.json
+random cost: 15124
+optimize cost: 1838
+data/nor2/nor2_3.json
+random cost: 11780
+optimize cost: 1002
+data/nor2/nor2_4.json
+random cost: 13196
+optimize cost: 1334
+data/nor2/nor2_5.json
+random cost: 11808
+optimize cost: 1526
+data/nor3/nor3_1.json
+random cost: 28102
+optimize cost: 1530
+data/nor3/nor3_2.json
+random cost: 22750
+optimize cost: 1222
+data/nor3/nor3_3.json
+random cost: 14568
+optimize cost: 1084
+data/nor3/nor3_4.json
+random cost: 19534
+optimize cost: 1026
+data/nor3/nor3_5.json
+random cost: 23064
+optimize cost: 1578
+data/nor4/nor4_large_1.json
+random cost: 1365678
+optimize cost: 25116
+data/nor4/nor4_large_2.json
+random cost: 1306742
+optimize cost: 24292
+data/nor4/nor4_large_3.json
+random cost: 472678
+optimize cost: 20782
+data/nor4/nor4_large_4.json
+random cost: 1045938
+optimize cost: 19482
+data/nor4/nor4_large_5.json
+random cost: 757452
+optimize cost: 13678
+data/nor4/nor4_small_1.json
+random cost: 745574
+optimize cost: 13898
+data/nor4/nor4_small_2.json
+random cost: 760650
+optimize cost: 14324
+data/nor4/nor4_small_3.json
+random cost: 624902
+optimize cost: 11648
+data/nor4/nor4_small_4.json
+random cost: 606602
+optimize cost: 11164
+data/nor4/nor4_small_5.json
+random cost: 762064
+optimize cost: 14150
+data/nor5/nor5_large_1.json
+random cost: 1510838
+optimize cost: 36398
+data/nor5/nor5_large_2.json
+random cost: 5059770
+optimize cost: 200900
+data/nor5/nor5_large_3.json
+random cost: 4998558
+optimize cost: 101544
+data/nor5/nor5_large_4.json
+random cost: 3041984
+optimize cost: 58570
+data/nor5/nor5_large_5.json
+random cost: 2617642
+optimize cost: 83414
+data/nor5/nor5_small_1.json
+random cost: 1248646
+optimize cost: 30068
+data/nor5/nor5_small_2.json
+random cost: 1832194
+optimize cost: 58678
+data/nor5/nor5_small_3.json
+random cost: 802132
+optimize cost: 29348
+data/nor5/nor5_small_4.json
+random cost: 1541452
+optimize cost: 55168
+data/nor5/nor5_small_5.json
+random cost: 1120792
+optimize cost: 26876
+data/smi_close/smi_close_0.json
+random cost: 600
+optimize cost: 176
+data/smi_close/smi_close_1.json
+random cost: 36428
+optimize cost: 2274
+data/smi_close/smi_close_2.json
+random cost: 30498
+optimize cost: 1636
+data/smi_close/smi_close_3.json
+random cost: 11402
+optimize cost: 1574
+data/smi_close/smi_close_4.json
+random cost: 36
+optimize cost: 36
+data/smi_close/smi_close_5.json
+random cost: 7020
+optimize cost: 336
+data/smi_close/smi_close_6.json
+random cost: 868
+optimize cost: 96
+data/smi_close/smi_close_7.json
+random cost: 18262
+optimize cost: 668
+data/smi_close/smi_close_8.json
+random cost: 30444
+optimize cost: 756
+data/smi_headway/smi_headway_0.json
+random cost: 866
+optimize cost: 260
+data/smi_headway/smi_headway_1.json
+random cost: 52740
+optimize cost: 2496
+data/smi_headway/smi_headway_10.json
+random cost: 10620
+optimize cost: 1180
+data/smi_headway/smi_headway_11.json
+random cost: 25500
+optimize cost: 2612
+data/smi_headway/smi_headway_2.json
+random cost: 52428
+optimize cost: 3158
+data/smi_headway/smi_headway_3.json
+random cost: 20308
+optimize cost: 2876
+data/smi_headway/smi_headway_4.json
+random cost: 42
+optimize cost: 38
+data/smi_headway/smi_headway_5.json
+random cost: 7792
+optimize cost: 392
+data/smi_headway/smi_headway_6.json
+random cost: 2626
+optimize cost: 212
+data/smi_headway/smi_headway_7.json
+random cost: 44680
+optimize cost: 1892
+data/smi_headway/smi_headway_8.json
+random cost: 48246
+optimize cost: 1032
+data/smi_headway/smi_headway_9.json
+random cost: 41520
+optimize cost: 1886
+data/swi/swi_1.json
+random cost: 0
+optimize cost: 0
+data/swi/swi_2.json
+random cost: 63012
+optimize cost: 62706
+data/swi/swi_3.json
+random cost: 160908
+optimize cost: 158202
+data/swi/swi_4.json
+random cost: 177960
+optimize cost: 158750
+data/swi/swi_5.json
+random cost: 178536
+optimize cost: 160484
+data/swi/swi_6.json
+random cost: 140790
+optimize cost: 93850
+data/swi/swi_7.json
+random cost: 155404
+optimize cost: 106578
+data/swi/swi_8.json
+random cost: 127494
+optimize cost: 33998
+data/swi/swi_9.json
+random cost: 177458
+optimize cost: 64278
+data/wab_large/wab_large_1.json
+random cost: 508660
+optimize cost: 15534
+data/wab_large/wab_large_10.json
+random cost: 454758
+optimize cost: 12592
+data/wab_large/wab_large_11.json
+random cost: 454914
+optimize cost: 13968
+data/wab_large/wab_large_12.json
+random cost: 454320
+optimize cost: 13288
+data/wab_large/wab_large_13.json
+random cost: 444770
+optimize cost: 12962
+data/wab_large/wab_large_14.json
+random cost: 445860
+optimize cost: 12370
+data/wab_large/wab_large_15.json
+random cost: 447056
+optimize cost: 13816
+data/wab_large/wab_large_16.json
+random cost: 448262
+optimize cost: 13784
+data/wab_large/wab_large_2.json
+random cost: 496590
+optimize cost: 15966
+data/wab_large/wab_large_3.json
+random cost: 484256
+optimize cost: 14434
+data/wab_large/wab_large_4.json
+random cost: 486936
+optimize cost: 15180
+data/wab_large/wab_large_5.json
+random cost: 477340
+optimize cost: 15686
+data/wab_large/wab_large_6.json
+random cost: 480908
+optimize cost: 14770
+data/wab_large/wab_large_7.json
+random cost: 475926
+optimize cost: 14212
+data/wab_large/wab_large_8.json
+random cost: 455760
+optimize cost: 13822
+data/wab_large/wab_large_9.json
+random cost: 454868
+optimize cost: 14304
+data/wab_small/wab_small_1.json
+random cost: 197786
+optimize cost: 7132
+data/wab_small/wab_small_10.json
+random cost: 210632
+optimize cost: 8544
+data/wab_small/wab_small_11.json
+random cost: 209512
+optimize cost: 7820
+data/wab_small/wab_small_12.json
+random cost: 211094
+optimize cost: 7220
+data/wab_small/wab_small_13.json
+random cost: 206256
+optimize cost: 7366
+data/wab_small/wab_small_14.json
+random cost: 205558
+optimize cost: 6302
+data/wab_small/wab_small_15.json
+random cost: 182846
+optimize cost: 7104
+data/wab_small/wab_small_16.json
+random cost: 181480
+optimize cost: 7644
+data/wab_small/wab_small_2.json
+random cost: 187874
+optimize cost: 8436
+data/wab_small/wab_small_3.json
+random cost: 201038
+optimize cost: 7464
+data/wab_small/wab_small_4.json
+random cost: 200460
+optimize cost: 7894
+data/wab_small/wab_small_5.json
+random cost: 213468
+optimize cost: 7454
+data/wab_small/wab_small_6.json
+random cost: 213556
+optimize cost: 8392
+data/wab_small/wab_small_7.json
+random cost: 217024
+optimize cost: 8288
+data/wab_small/wab_small_8.json
+random cost: 213254
+optimize cost: 7600
+data/wab_small/wab_small_9.json
+random cost: 210952
+optimize cost: 7108
+total entries: 112
