@@ -38,7 +38,7 @@ public:
 	idx_t n_res = 0;
 	idx_t max_paths_len = 0;
 
-	Instance(const std::string& file_name, const bool verify=false);
+	Instance(const std::string& file_name, bool verbose=false, bool verify=false);
 	~Instance();
 
 	METHOD_N(trains)

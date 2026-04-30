@@ -30,9 +30,7 @@ public:
 	static constexpr dur_t DUR_MAX = Instance::DUR_MAX;
 	static constexpr tim_t TIM_MAX = Instance::TIM_MAX;
 
-
 	double price_mult = 0.001;
-
 
 	const Instance& inst;
 	const Preprocess& prepr;
@@ -43,8 +41,16 @@ public:
 		Chunk_manager& chunk_mrng, GRBEnv& grb_env);
 	~Route_planner();
 
+	std::vector<std::vector<idx_pr>> train_conflicts;
+	std::vector<idx_t> conf_chain_len = {};
+
 	void make_init_routes();
 	void optimize_routes();
+
+	void estimate_level_times();
+	void make_train_conflicts();
+
+	size_t get_cost_sum();
 
 private:
 	struct Flow_cons;
@@ -53,29 +59,29 @@ private:
 	Chunk_manager& chunk_mngr;
 	GRBModel model;
 
-	GRBVar obj;
-
     Flag op_active;
 	std::vector<idx_t> flag_list = {};
 
-	std::vector<Level> levels = {};
 	std::vector<Route> routes = {};
+
+	std::vector<tim_t> level_time = {};
 
 	std::vector<GRBConstr> flow_constr = {};
 	std::vector<GRBConstr> obj_constr = {};
 
 	void get_random_routes();
 
-	void update_values(const std::vector<idx_t>& routes);
-	void update_ops(const std::vector<idx_t>& routes);
-	void update_price(const std::vector<idx_t>& routes);
+	template<typename C>
+	void price_routes(C& routes);
+	size_t get_train_cost(idx_t train);
+
+	template<typename C>
+	void update_values(C& routes);
+
+	template<typename C>
+	void update_ops(C& routes);
 
 	void update_all_ops();
-	void update_level_time(idx_t t);
-
-	void sync_extern();
-	void get_op_changes();
-	void get_time_changes();
 
 	void find_req_routes();
 	void add_route_vars();
@@ -86,22 +92,17 @@ private:
 	void freeze_all();
 	void unfreeze_all();
 
+	template<typename C>
+	void freeze_routes(C& routes);
+
+	template<typename C>
+	void unfreeze_routes(C& routes);
+
 	void init_data();
 	void init_ops();
 	void init_levels();
 	void init_routes();
 	void init_model();
-
-	size_t get_max_chain(const Preprocess::Section& sect);
-};
-
-
-struct Route_planner::Level
-{
-	idx_t next = IDX_MAX;
-	dur_t dur = 0;
-	tim_t lb = 0;
-	Tracked<tim_t> time = {0, 0};
 };
 
 
@@ -110,7 +111,6 @@ struct Route_planner::Route
 	Tracked<int8_t> active = {0, 0};
 	int8_t required = 0;
 	int8_t frozen = 0;
-	double price = 0.0;
 	GRBVar var;
 	const Preprocess::Route* prepr = nullptr;
 

@@ -56,7 +56,7 @@ public:
 	size_t chunk_direct_merges = 0;
 	size_t chunk_parallel_merges = 0;
 	
-	Preprocess(const Instance& inst, const bool verify=false);
+	Preprocess(const Instance& inst, bool verbose=false, bool verify=false);
 	~Preprocess();
 
 	void get_chunk_link_set(std::set<idx_t>& link_set, const Chunk& chunk) const;

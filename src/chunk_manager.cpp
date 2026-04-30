@@ -32,7 +32,7 @@ void Chunk_manager::init_data()
 
 void Chunk_manager::init_ops()
 {
-	this->op_active.set_n_items(this->inst.n_ops());
+	// this->op_active.set_n_items(this->inst.n_ops());
 }
 
 
@@ -98,38 +98,24 @@ void Chunk_manager::init_res()
 };
 
 
-void Chunk_manager::op_change(const Batch<idx_t, int16_t>& op_change)
+void Chunk_manager::op_change(const Flag& op_change_flag)
 {
-	for (auto x : op_change) {
-		bool changed = false;
-		if (x.value < 0) {
-			if (this->op_active[x.idx]) {
-				this->op_active -= x.idx;
-				changed = true;
-			}
-		}
-		else if (x.value > 0) {
-			if (!this->op_active[x.idx]) {
-				this->op_active += x.idx;
-				changed = true;
-			}
-		}
-
-		if (changed) {
-			for (auto c : this->prepr.ops[x.idx].chunks) {
-				this->state_dirty += c;
-			}
+	op_change_flag.get_true_list(this->flag_list);
+	for (auto c : this->flag_list) {
+		for (auto c : this->prepr.ops[c].chunks) {
+			this->state_dirty += c;
 		}
 	}
 }
 
-void Chunk_manager::time_change(const Batch<idx_t, tim_t>& level_time_change)
-{
-	for (auto x : level_time_change) {
-		if (this->level_time[x.idx] != x.value) {
-			this->level_time[x.idx] = x.value;
 
-			for (auto c : this->level_chunks[x.idx]) {
+void Chunk_manager::time_change(const std::vector<pair<idx_t, tim_t>>& level_time_change)
+{
+	for (auto& x : level_time_change) {
+		if (level_time[x.first] != x.second) {
+			level_time[x.first] = x.second;
+
+			for (auto c : this->level_chunks[x.first]) {
 				this->time_dirty += c;
 			}
 		}
@@ -137,10 +123,10 @@ void Chunk_manager::time_change(const Batch<idx_t, tim_t>& level_time_change)
 }
 
 
-void Chunk_manager::sync_state()
+void Chunk_manager::sync_state(const Flag& op_active)
 {
-	this->state_dirty.get_true_list(this->list_hlpr);
-	for (auto c : this->list_hlpr) {
+	this->state_dirty.get_true_list(this->flag_list);
+	for (auto c : this->flag_list) {
 		auto& chunk = this->prepr.chunks[c];
 		
 		this->is_active -= c;
@@ -180,8 +166,8 @@ void Chunk_manager::sync_state()
 
 void Chunk_manager::sync_time()
 {
-	this->time_dirty.get_true_list(this->list_hlpr);
-	for (auto c : this->list_hlpr) {
+	this->time_dirty.get_true_list(this->flag_list);
+	for (auto c : this->flag_list) {
 		auto& state = this->state[c];
 		auto& time = this->time[c];
 
@@ -210,13 +196,56 @@ void Chunk_manager::sync_res()
 {
 	auto time_cmp = Time_cmp(this->time);
 
-	this->res_dirty.get_true_list(this->list_hlpr);
-	for (auto r : this->list_hlpr) {
+	this->res_dirty.get_true_list(this->flag_list);
+	for (auto r : this->flag_list) {
 		auto& res = this->res[r];
 		sort(res.chunks, &res.chunks[res.size], time_cmp);
 	}
 
 	this->res_dirty.clear();
+}
+
+void Chunk_manager::get_all_conflicts(vector<idx_pr>& confs, double stretch)
+{
+	confs.clear();
+
+	for (auto r : this->inst.res_range()) {
+		auto& res = this->res[r];
+
+		for (idx_t i = 0; i < res.size; i++) {
+			idx_t c_a = res.chunks[i];
+			auto& t_a = this->time[c_a];
+
+			if (t_a.start == TIM_MAX || t_a.end == TIM_MAX) {
+				break;
+			}
+
+			tim_t d_a = round(stretch*(t_a.end - t_a.start));
+
+			for (idx_t j = i + 1; j < res.size; j++) {
+				idx_t c_b = res.chunks[j];
+
+				if (this->train_idx[c_a] == this->train_idx[c_b]) {
+					continue;
+				}
+
+				auto& t_b = this->time[c_b];
+
+				if (t_b.start == TIM_MAX || t_b.end == TIM_MAX) {
+					break;
+				}
+
+				tim_t d_b = round(stretch*(t_b.end - t_b.start));
+			
+				if (t_a.end + d_a + d_b > t_b.start) {
+					confs.push_back({c_a, c_b});
+				}
+				else {
+					break;
+				}
+			}
+ 		}
+	}
 }
 
 

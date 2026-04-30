@@ -11,22 +11,22 @@
 using namespace std;
 
 
-Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
+Preprocess::Preprocess(const Instance& inst, bool verbose, bool verify) : inst(inst)
 {
 	this->trains.resize(this->inst.n_trains(), Train());
 
-	cout << "Preprocess" << endl;
+	if (verbose) cout << "Preprocess" << endl;
 	
 	this->make_junctions();
 	this->make_invalid_transitions();
-	cout << "  juncts:  " << this->n_juncts() << endl;
+	if (verbose) cout << "  juncts:  " << this->n_juncts() << endl;
 	size_t n_inva_junct = this->n_inva_junct();
 	if (n_inva_junct > 0) {
-		cout << "    inva tra: " << n_inva_junct << endl;
+		if (verbose) cout << "    inva tra: " << n_inva_junct << endl;
 	}
 
 	this->make_levels();
-	cout << "  levels:  " << this->n_levels() << endl;
+	if (verbose) cout << "  levels:  " << this->n_levels() << endl;
 
 	if (verify) {
 		this->verify_juncts();
@@ -37,29 +37,29 @@ Preprocess::Preprocess(const Instance& inst, const bool verify) : inst(inst)
 	this->make_req_ops();
 	size_t n_opt_lvls = this->n_opt_levels();
 	if (n_opt_lvls > 0) {
-		cout << "    optional: " << n_opt_lvls << endl;
+		if (verbose) cout << "    optional: " << n_opt_lvls << endl;
 	}
 
 
 	this->make_routes();
 	this->make_route_junct_level();
-	cout << "  routes:  " << this->n_routes() << endl;
+	if (verbose) cout << "  routes:  " << this->n_routes() << endl;
 	
 	this->make_sections();
 	this->make_section_min_dur();
-	cout << "  sects:   " << this->n_sects() << endl;
+	if (verbose) cout << "  sects:   " << this->n_sects() << endl;
 
 	this->make_resource_chunks();
 	this->assign_op_chunks();
 	
-	cout << "  chunks:  " << this->n_chunks() << endl;
+	if (verbose) cout << "  chunks:  " << this->n_chunks() << endl;
 
 	if (this->chunk_direct_merges > 0) {
-		cout << "    direct merges:   " << this->chunk_direct_merges << endl;
+		if (verbose) cout << "    direct merges:   " << this->chunk_direct_merges << endl;
 	}
 
 	if (this->chunk_parallel_merges > 0) {
-		cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
+		if (verbose) cout << "    parralel merges: " << this->chunk_parallel_merges << endl;
 	}
 
 	if (verify) {

@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "utils/batch.hpp"
 #include "instance.hpp"
 #include "preprocess.hpp"
 
@@ -38,18 +37,17 @@ public:
 	Chunk_manager(const Preprocess& prepr);
 	~Chunk_manager();
 
-	void op_change(const Batch<idx_t, int16_t>& op_change);
-	void time_change(const Batch<idx_t, tim_t>& level_time_change);
+	void op_change(const Flag& op_change);
+	void time_change(const std::vector<std::pair<idx_t, tim_t>>& level_time_change);
 
-	void sync_state();
+	void sync_state(const Flag& op_active);
 	void sync_time();
 
+	void get_all_conflicts(std::vector<idx_pr>& confs, double stretch=0.0);
 
 private:
 	struct Time_cmp;
 
-	Flag op_active;
-	
 	Flag state_dirty;
 	Flag time_dirty;
 	Flag res_dirty;
@@ -58,7 +56,7 @@ private:
 	std::vector<tim_t> level_time = {};
 	std::vector<std::vector<idx_t>> level_chunks = {};
 
-	std::vector<idx_t> list_hlpr;
+	std::vector<idx_t> flag_list;
 
 	void init_data();
 	void init_ops();

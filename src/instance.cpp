@@ -7,7 +7,7 @@
 
 using namespace std;
 
-Instance::Instance(const string& file_name, const bool verify)
+Instance::Instance(const string& file_name, bool verbose, bool verify)
 {
 	json inst_jsn = get_json_from_file(file_name);
 
@@ -21,7 +21,7 @@ Instance::Instance(const string& file_name, const bool verify)
 		this->verify_pred();
 	}
 
-	cout << "Instance" <<
+	if (verbose) cout << "Instance" <<
 		"\n  trains:  " << this->n_trains() <<
 		"\n  objs:    " << this->objs.size() << 
 		"\n  ops:     " << this->n_ops() <<

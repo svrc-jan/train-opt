@@ -9,7 +9,7 @@
 
 #include "preprocess.hpp"
 
-#define CONF_IDX(a, b) (a < b) ? (((lnk_t)a << 16) | (lnk_t)b) : (((lnk_t)b << 16) | (lnk_t)a)
+#define CONF_HASH(a, b) (a < b) ? (((lnk_t)a << 16) | (lnk_t)b) : (((lnk_t)b << 16) | (lnk_t)a)
 
 
 class Link_graph
@@ -34,16 +34,13 @@ public:
 	std::vector<Chunk> chunks = {};
 	std::vector<Conflict> confs = {};
 
-	std::vector<uint8_t> chunk_max_chain = {};
-	std::vector<uint8_t> conf_chain_len = {};
-
-	Link_graph(const Preprocess& prepr, bool verify=false);
+	Link_graph(const Preprocess& prepr, bool verbose=false, bool verify=false);
 	~Link_graph();
 
 	void op_change(const Flag& op_change_flag);
 	void sync_links(const Flag& op_active);
 
-	void update_max_chain();
+	void get_chain_len(const std::vector<idx_pr>& confs, std::vector<idx_t>& len);
 
 	idx_t median_chain();
 
@@ -64,9 +61,10 @@ private:
 	Flag link_active;
 	Flag link_dirty;
 
-	Flag chunk_req;
 	Flag conf_done;
+	std::vector<lnk_t> conf_to_do;
 	std::vector<lnk_t> chain;
+	std::vector<uint16_t> conf_chain_len;
 
 	std::vector<idx_t> flag_list;
 
@@ -85,7 +83,7 @@ private:
 
 	void verify_links();
 
-	void chain_search(lnk_t k);
+	void chain_search(lnk_t k, bool need_opp=false);
 };
 
 // size_t link_chunk_size = sizeof(Link_graph::Chunk);
@@ -120,4 +118,5 @@ struct Link_graph::Conf_link
 	lnk_t idx = CNF_MAX;
 	std::pair<lnk_t, lnk_t> link;
 	int8_t opp = 0;
+	int8_t active = 0;
 };

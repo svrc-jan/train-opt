@@ -55,9 +55,14 @@ int main(int argc, char const *argv[])
 		Chunk_manager chunk_mngr(prepr);
 		Route_planner route_plnr(prepr, link_graph, chunk_mngr, grb_env);
 
+		route_plnr.estimate_level_times();
+		route_plnr.make_train_conflicts();
+
 		route_plnr.make_init_routes();
-		cout << "random chain median: " << link_graph.median_chain() << endl;
+		cout << "random cost: " << route_plnr.get_cost_sum() << endl;
+
 		route_plnr.optimize_routes();
+		cout << "optimize cost: " << route_plnr.get_cost_sum() << endl;
 	}
 
 	cout << "total entries: " << entries.size() << endl;

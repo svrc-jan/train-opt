@@ -9,14 +9,14 @@
 using namespace std;
 
 
-Link_graph::Link_graph(const Preprocess& prepr, bool verify)
+Link_graph::Link_graph(const Preprocess& prepr, bool verbose, bool verify)
 	: inst(prepr.inst), prepr(prepr)
 {	
-	cout << "Link_graph" << endl;
+	if (verbose) cout << "Link_graph" << endl;
 
 	this->make_chunks();
 	this->make_links();
-	cout << "  links: " << this->links.size() << endl;
+	if (verbose) cout << "  links: " << this->links.size() << endl;
 
 	if (verify) {
 		this->verify_links();
@@ -25,10 +25,10 @@ Link_graph::Link_graph(const Preprocess& prepr, bool verify)
 	this->make_op_links();
 	
 	this->make_confs();
-	cout << "  confs: " << this->confs.size() << endl;
+	if (verbose) cout << "  confs: " << this->confs.size() << endl;
 
 	this->make_conf_links();
-	cout << "  c lnk: " << this->conf_links.size() << endl;
+	if (verbose) cout << "  c lnk: " << this->conf_links.size() << endl;
 
 	this->make_chunk_confs();
 }
@@ -78,9 +78,6 @@ void Link_graph::make_chunks()
 		chunk.bkw.clear();
 		chunk.prepr = &this->prepr.chunks[c];
 	}
-
-	this->chunk_req.set_n_items(this->prepr.n_chunks());
-	this->chunk_max_chain.resize(this->prepr.n_chunks());
 }
 
 void Link_graph::make_links()
@@ -164,7 +161,7 @@ void Link_graph::add_links(Chunk& chunk)
 		Link link = {
 			.res = {chunk.prepr->res, this->prepr.chunks[it->first].res},
 			.chunk = {chunk.prepr->idx, it->first},
-			.ops = {nullptr, nullptr},
+			.ops = {nullptr, nullptr}
 		};
 
 		link.ops.set_size(it->second.size());
@@ -260,7 +257,7 @@ void Link_graph::make_confs()
 			.links = {nullptr, nullptr}
 		};
 
-		this->conf_map[CONF_IDX(conf.chunk.first, conf.chunk.second)] = conf.idx;
+		this->conf_map[CONF_HASH(conf.chunk.first, conf.chunk.second)] = conf.idx;
 
 		this->confs.push_back(conf);
 	}
@@ -369,7 +366,7 @@ void Link_graph::add_conf_links_dir(Conflict& conf, const std::pair<int8_t, int8
 			if (r_a == r_b) {
 				conf.links.increment_size(1);
 				this->conf_links.push_back({
-					.idx = this->conf_map[CONF_IDX(c_a, c_b)],
+					.idx = this->conf_map[CONF_HASH(c_a, c_b)],
 					.link = {l_a, l_b},
 					.opp = (fwd.first != fwd.second)
 				});
@@ -400,42 +397,31 @@ void Link_graph::make_chunk_confs()
 }
 
 
-void Link_graph::update_max_chain()
+void Link_graph::get_chain_len(const vector<idx_pr>& confs, vector<idx_t>& len)
 {
-	this->conf_done.clear();
-	size_t n_confs = this->confs.size();
-
-	for (size_t k = 0; k < n_confs; k++) {
-		this->conf_chain_len[k] = 0;
+	this->conf_to_do.clear();
+	for (auto x : confs) {
+		this->conf_to_do.push_back(this->conf_map[CONF_HASH(x.first, x.second)]);
 	}
 
-	for (size_t k = 0; k < n_confs; k++) {
+	this->conf_done.clear();
+	for (auto k : this->conf_to_do) {
 		this->chain.clear();
-
 		this->chain_search(k);
 
-		if (this->chain.empty()) {
-			continue;
-		}
-
-		size_t chain_len = this->chain.size();
-		assert(chain_len < 255);
-
-		for (auto x : this->chain) {
-			this->conf_chain_len[x] = (uint8_t)chain_len;
+		for (auto k : this->chain) {
+			this->conf_chain_len[k] = (uint16_t)this->chain.size();
 		}
 	}
 
-	for (auto c : this->prepr.chunks_range()) {
-		chunk_max_chain[c] = 0;
-		for (auto k : this->chunks[c].confs) {
-			chunk_max_chain[c] = MAX(chunk_max_chain[c], conf_chain_len[k]);
-		}
+	len.clear();
+	for (auto k : this->conf_to_do) {
+		len.push_back(this->conf_chain_len[k]);
 	}
 }
 
 
-void Link_graph::chain_search(lnk_t k)
+void Link_graph::chain_search(lnk_t k, bool need_opp)
 {
 	if (this->conf_done[k]) {
 		return;
@@ -451,7 +437,7 @@ void Link_graph::chain_search(lnk_t k)
 			continue;
 		}
 
-		if (!link.opp) {
+		if (need_opp && !link.opp) {
 			continue;
 		}
 
@@ -459,25 +445,8 @@ void Link_graph::chain_search(lnk_t k)
 			continue;
 		}
 
-		this->chain_search(link.idx);
+		this->chain_search(link.idx, need_opp);
 	}
 }
 
-Link_graph::idx_t Link_graph::median_chain()
-{
-	std::vector<idx_t> vals;
-	vals.reserve(this->chunks.size());
-
-	for (auto c : this->prepr.chunks_range()) {
-		idx_t x = this->chunk_max_chain[c];
-
-		if (x > 1) {
-			vals.push_back(x);
-		}
-	}
-
-	sort(vals.begin(), vals.end());
-
-	return vals[vals.size()/2];
-}
 

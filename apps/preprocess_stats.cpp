@@ -34,7 +34,7 @@ int main(int argc, char const *argv[])
 
 	for (const auto& entry : entries) {
 		cout << entry << endl;
-		Instance inst(entry);
+		Instance inst(entry, true);
 		Preprocess prepr(inst, true);
 	}
 
