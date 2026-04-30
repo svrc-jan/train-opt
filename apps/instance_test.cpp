@@ -12,12 +12,15 @@ int main(int argc, char const *argv[])
 
 	vector<string> entries = {};
 
-	for (const auto& entry : filesystem::directory_iterator("data/")) {
-		if (entry.is_directory()) {
-			continue;
+	for (const auto& dir_entry : filesystem::directory_iterator("data/")) {
+		if (dir_entry.is_directory()) {
+			for (const auto& file_entry : filesystem::directory_iterator(dir_entry)) {
+				entries.push_back(file_entry.path());
+			}
 		}
-
-		entries.push_back(entry.path());
+		else {
+			entries.push_back(dir_entry.path());
+		}
 	}
 
 	sort(entries.begin(), entries.end());

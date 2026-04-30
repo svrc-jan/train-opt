@@ -201,7 +201,9 @@ void Instance::parse(const json& inst_jsn)
 	}
 
 	for (auto i : this->objs_range()) {
-		this->ops[this->objs[i].op].obj = i;
+		auto& op = this->ops[this->objs[i].op];
+		assert(op.obj == IDX_MAX);
+		op.obj = i;
 	}
 }
 

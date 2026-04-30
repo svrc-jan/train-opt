@@ -1,337 +1,337 @@
-data/nor1/nor1_critical_0.json
+data/nor1_critical/nor1_critical_0.json
 random cost: 3678
-optimize cost: 294
-data/nor1/nor1_critical_1.json
+optimize cost: 146
+data/nor1_critical/nor1_critical_1.json
 random cost: 3432
-optimize cost: 342
-data/nor1/nor1_critical_2.json
+optimize cost: 174
+data/nor1_critical/nor1_critical_2.json
 random cost: 2026
-optimize cost: 154
-data/nor1/nor1_critical_3.json
+optimize cost: 96
+data/nor1_critical/nor1_critical_3.json
 random cost: 5334
-optimize cost: 564
-data/nor1/nor1_critical_4.json
+optimize cost: 258
+data/nor1_critical/nor1_critical_4.json
 random cost: 456
-optimize cost: 68
-data/nor1/nor1_critical_5.json
+optimize cost: 64
+data/nor1_critical/nor1_critical_5.json
 random cost: 1136
-optimize cost: 92
-data/nor1/nor1_critical_6.json
+optimize cost: 36
+data/nor1_critical/nor1_critical_6.json
 random cost: 1858
-optimize cost: 266
-data/nor1/nor1_critical_7.json
+optimize cost: 78
+data/nor1_critical/nor1_critical_7.json
 random cost: 1748
-optimize cost: 190
-data/nor1/nor1_critical_8.json
+optimize cost: 136
+data/nor1_critical/nor1_critical_8.json
 random cost: 2720
-optimize cost: 328
-data/nor1/nor1_critical_9.json
+optimize cost: 158
+data/nor1_critical/nor1_critical_9.json
 random cost: 2890
-optimize cost: 380
-data/nor1/nor1_full_0.json
+optimize cost: 146
+data/nor1_full/nor1_full_0.json
 random cost: 59960
-optimize cost: 4628
-data/nor1/nor1_full_1.json
+optimize cost: 1876
+data/nor1_full/nor1_full_1.json
 random cost: 69702
-optimize cost: 4714
-data/nor1/nor1_full_2.json
+optimize cost: 2330
+data/nor1_full/nor1_full_2.json
 random cost: 25886
-optimize cost: 1294
-data/nor1/nor1_full_3.json
+optimize cost: 658
+data/nor1_full/nor1_full_3.json
 random cost: 35554
-optimize cost: 2336
-data/nor1/nor1_full_4.json
+optimize cost: 942
+data/nor1_full/nor1_full_4.json
 random cost: 66562
-optimize cost: 2940
-data/nor1/nor1_full_5.json
+optimize cost: 1622
+data/nor1_full/nor1_full_5.json
 random cost: 64280
-optimize cost: 3982
-data/nor1/nor1_full_6.json
+optimize cost: 1996
+data/nor1_full/nor1_full_6.json
 random cost: 68798
-optimize cost: 4038
-data/nor1/nor1_full_7.json
+optimize cost: 2172
+data/nor1_full/nor1_full_7.json
 random cost: 67442
-optimize cost: 4256
-data/nor1/nor1_full_8.json
+optimize cost: 2130
+data/nor1_full/nor1_full_8.json
 random cost: 94240
-optimize cost: 4628
-data/nor1/nor1_full_9.json
+optimize cost: 2426
+data/nor1_full/nor1_full_9.json
 random cost: 70596
-optimize cost: 4878
-data/nor2/nor2_1.json
+optimize cost: 2272
+data/nor2_3/nor2_1.json
 random cost: 16360
-optimize cost: 1180
-data/nor2/nor2_2.json
+optimize cost: 650
+data/nor2_3/nor2_2.json
 random cost: 15124
-optimize cost: 1838
-data/nor2/nor2_3.json
+optimize cost: 642
+data/nor2_3/nor2_3.json
 random cost: 11780
-optimize cost: 1002
-data/nor2/nor2_4.json
+optimize cost: 556
+data/nor2_3/nor2_4.json
 random cost: 13196
-optimize cost: 1334
-data/nor2/nor2_5.json
+optimize cost: 632
+data/nor2_3/nor2_5.json
 random cost: 11808
-optimize cost: 1526
-data/nor3/nor3_1.json
+optimize cost: 606
+data/nor2_3/nor3_1.json
 random cost: 28102
-optimize cost: 1530
-data/nor3/nor3_2.json
+optimize cost: 706
+data/nor2_3/nor3_2.json
 random cost: 22750
-optimize cost: 1222
-data/nor3/nor3_3.json
+optimize cost: 648
+data/nor2_3/nor3_3.json
 random cost: 14568
-optimize cost: 1084
-data/nor3/nor3_4.json
+optimize cost: 538
+data/nor2_3/nor3_4.json
 random cost: 19534
-optimize cost: 1026
-data/nor3/nor3_5.json
+optimize cost: 622
+data/nor2_3/nor3_5.json
 random cost: 23064
-optimize cost: 1578
+optimize cost: 678
 data/nor4/nor4_large_1.json
 random cost: 1365678
-optimize cost: 25116
+optimize cost: 21924
 data/nor4/nor4_large_2.json
 random cost: 1306742
-optimize cost: 24292
+optimize cost: 21136
 data/nor4/nor4_large_3.json
 random cost: 472678
-optimize cost: 20782
+optimize cost: 18362
 data/nor4/nor4_large_4.json
 random cost: 1045938
-optimize cost: 19482
+optimize cost: 16630
 data/nor4/nor4_large_5.json
 random cost: 757452
-optimize cost: 13678
+optimize cost: 11988
 data/nor4/nor4_small_1.json
 random cost: 745574
-optimize cost: 13898
+optimize cost: 11536
 data/nor4/nor4_small_2.json
 random cost: 760650
-optimize cost: 14324
+optimize cost: 12080
 data/nor4/nor4_small_3.json
 random cost: 624902
-optimize cost: 11648
+optimize cost: 9848
 data/nor4/nor4_small_4.json
 random cost: 606602
-optimize cost: 11164
+optimize cost: 9446
 data/nor4/nor4_small_5.json
 random cost: 762064
-optimize cost: 14150
+optimize cost: 12158
 data/nor5/nor5_large_1.json
 random cost: 1510838
-optimize cost: 36398
+optimize cost: 32316
 data/nor5/nor5_large_2.json
 random cost: 5059770
-optimize cost: 200900
+optimize cost: 97898
 data/nor5/nor5_large_3.json
 random cost: 4998558
-optimize cost: 101544
+optimize cost: 96530
 data/nor5/nor5_large_4.json
 random cost: 3041984
-optimize cost: 58570
+optimize cost: 53308
 data/nor5/nor5_large_5.json
 random cost: 2617642
-optimize cost: 83414
+optimize cost: 119174
 data/nor5/nor5_small_1.json
 random cost: 1248646
-optimize cost: 30068
+optimize cost: 26636
 data/nor5/nor5_small_2.json
 random cost: 1832194
-optimize cost: 58678
+optimize cost: 55388
 data/nor5/nor5_small_3.json
 random cost: 802132
-optimize cost: 29348
+optimize cost: 26236
 data/nor5/nor5_small_4.json
 random cost: 1541452
-optimize cost: 55168
+optimize cost: 25518
 data/nor5/nor5_small_5.json
 random cost: 1120792
-optimize cost: 26876
+optimize cost: 24082
 data/smi_close/smi_close_0.json
 random cost: 600
 optimize cost: 176
 data/smi_close/smi_close_1.json
 random cost: 36428
-optimize cost: 2274
+optimize cost: 1070
 data/smi_close/smi_close_2.json
 random cost: 30498
-optimize cost: 1636
+optimize cost: 774
 data/smi_close/smi_close_3.json
 random cost: 11402
-optimize cost: 1574
+optimize cost: 386
 data/smi_close/smi_close_4.json
 random cost: 36
-optimize cost: 36
+optimize cost: 32
 data/smi_close/smi_close_5.json
 random cost: 7020
-optimize cost: 336
+optimize cost: 184
 data/smi_close/smi_close_6.json
 random cost: 868
-optimize cost: 96
+optimize cost: 62
 data/smi_close/smi_close_7.json
 random cost: 18262
-optimize cost: 668
+optimize cost: 206
 data/smi_close/smi_close_8.json
 random cost: 30444
-optimize cost: 756
+optimize cost: 242
 data/smi_headway/smi_headway_0.json
 random cost: 866
-optimize cost: 260
+optimize cost: 242
 data/smi_headway/smi_headway_1.json
 random cost: 52740
-optimize cost: 2496
+optimize cost: 1574
 data/smi_headway/smi_headway_10.json
 random cost: 10620
-optimize cost: 1180
+optimize cost: 578
 data/smi_headway/smi_headway_11.json
 random cost: 25500
-optimize cost: 2612
+optimize cost: 958
 data/smi_headway/smi_headway_2.json
 random cost: 52428
-optimize cost: 3158
+optimize cost: 1434
 data/smi_headway/smi_headway_3.json
 random cost: 20308
-optimize cost: 2876
+optimize cost: 722
 data/smi_headway/smi_headway_4.json
 random cost: 42
 optimize cost: 38
 data/smi_headway/smi_headway_5.json
 random cost: 7792
-optimize cost: 392
+optimize cost: 292
 data/smi_headway/smi_headway_6.json
 random cost: 2626
-optimize cost: 212
+optimize cost: 116
 data/smi_headway/smi_headway_7.json
 random cost: 44680
-optimize cost: 1892
+optimize cost: 414
 data/smi_headway/smi_headway_8.json
 random cost: 48246
-optimize cost: 1032
+optimize cost: 366
 data/smi_headway/smi_headway_9.json
 random cost: 41520
-optimize cost: 1886
+optimize cost: 782
 data/swi/swi_1.json
 random cost: 0
 optimize cost: 0
 data/swi/swi_2.json
 random cost: 63012
-optimize cost: 62706
+optimize cost: 62248
 data/swi/swi_3.json
 random cost: 160908
-optimize cost: 158202
+optimize cost: 158000
 data/swi/swi_4.json
 random cost: 177960
-optimize cost: 158750
+optimize cost: 148820
 data/swi/swi_5.json
 random cost: 178536
-optimize cost: 160484
+optimize cost: 149188
 data/swi/swi_6.json
 random cost: 140790
-optimize cost: 93850
+optimize cost: 93470
 data/swi/swi_7.json
 random cost: 155404
 optimize cost: 106578
 data/swi/swi_8.json
 random cost: 127494
-optimize cost: 33998
+optimize cost: 34094
 data/swi/swi_9.json
 random cost: 177458
-optimize cost: 64278
+optimize cost: 52862
 data/wab_large/wab_large_1.json
 random cost: 508660
-optimize cost: 15534
+optimize cost: 9384
 data/wab_large/wab_large_10.json
 random cost: 454758
-optimize cost: 12592
+optimize cost: 7848
 data/wab_large/wab_large_11.json
 random cost: 454914
-optimize cost: 13968
+optimize cost: 7722
 data/wab_large/wab_large_12.json
 random cost: 454320
-optimize cost: 13288
+optimize cost: 8076
 data/wab_large/wab_large_13.json
 random cost: 444770
-optimize cost: 12962
+optimize cost: 7776
 data/wab_large/wab_large_14.json
 random cost: 445860
-optimize cost: 12370
+optimize cost: 7730
 data/wab_large/wab_large_15.json
 random cost: 447056
-optimize cost: 13816
+optimize cost: 8184
 data/wab_large/wab_large_16.json
 random cost: 448262
-optimize cost: 13784
+optimize cost: 8406
 data/wab_large/wab_large_2.json
 random cost: 496590
-optimize cost: 15966
+optimize cost: 9208
 data/wab_large/wab_large_3.json
 random cost: 484256
-optimize cost: 14434
+optimize cost: 8928
 data/wab_large/wab_large_4.json
 random cost: 486936
-optimize cost: 15180
+optimize cost: 9066
 data/wab_large/wab_large_5.json
 random cost: 477340
-optimize cost: 15686
+optimize cost: 8546
 data/wab_large/wab_large_6.json
 random cost: 480908
-optimize cost: 14770
+optimize cost: 8320
 data/wab_large/wab_large_7.json
 random cost: 475926
-optimize cost: 14212
+optimize cost: 8428
 data/wab_large/wab_large_8.json
 random cost: 455760
-optimize cost: 13822
+optimize cost: 8008
 data/wab_large/wab_large_9.json
 random cost: 454868
-optimize cost: 14304
+optimize cost: 8002
 data/wab_small/wab_small_1.json
 random cost: 197786
-optimize cost: 7132
+optimize cost: 4158
 data/wab_small/wab_small_10.json
 random cost: 210632
-optimize cost: 8544
+optimize cost: 3888
 data/wab_small/wab_small_11.json
 random cost: 209512
-optimize cost: 7820
+optimize cost: 3808
 data/wab_small/wab_small_12.json
 random cost: 211094
-optimize cost: 7220
+optimize cost: 4002
 data/wab_small/wab_small_13.json
 random cost: 206256
-optimize cost: 7366
+optimize cost: 3940
 data/wab_small/wab_small_14.json
 random cost: 205558
-optimize cost: 6302
+optimize cost: 3904
 data/wab_small/wab_small_15.json
 random cost: 182846
-optimize cost: 7104
+optimize cost: 3926
 data/wab_small/wab_small_16.json
 random cost: 181480
-optimize cost: 7644
+optimize cost: 4164
 data/wab_small/wab_small_2.json
 random cost: 187874
-optimize cost: 8436
+optimize cost: 3984
 data/wab_small/wab_small_3.json
 random cost: 201038
-optimize cost: 7464
+optimize cost: 4026
 data/wab_small/wab_small_4.json
 random cost: 200460
-optimize cost: 7894
+optimize cost: 4058
 data/wab_small/wab_small_5.json
 random cost: 213468
-optimize cost: 7454
+optimize cost: 4024
 data/wab_small/wab_small_6.json
 random cost: 213556
-optimize cost: 8392
+optimize cost: 4024
 data/wab_small/wab_small_7.json
 random cost: 217024
-optimize cost: 8288
+optimize cost: 4402
 data/wab_small/wab_small_8.json
 random cost: 213254
-optimize cost: 7600
+optimize cost: 4046
 data/wab_small/wab_small_9.json
 random cost: 210952
-optimize cost: 7108
+optimize cost: 3954
 total entries: 112

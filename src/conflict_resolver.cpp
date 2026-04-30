@@ -6,14 +6,21 @@
 #include "utils/aux.hpp"
 #include "utils/stl_print.hpp"
 
+#ifndef GBR_EXCEPTION
+#define GBR_EXCEPTION 20
+#endif
+
+
 using namespace std;
 
 
-Conflict_resolver::Conflict_resolver(Solver& solver)
-	: inst(solver.inst), prepr(solver.prepr), slvr(solver), model(solver.grb_env)
+Conflict_resolver::Conflict_resolver(const Preprocess& prepr, Link_graph& link_graph, 
+	Chunk_manager& chunk_mrng, GRBEnv& grb_env)
+	: inst(prepr.inst), prepr(prepr), link_graph(link_graph), 
+	  chunk_mngr(chunk_mngr), model(GRBModel(grb_env))
 {
-	model.set(GRB_IntParam_LazyConstraints, 1);
-	model.set(GRB_DoubleParam_MIPGap, 2e-3);
+	this->event_graph.set_n_vtx(this->prepr.n_levels());
+	this->init_model();
 };
 
 
@@ -23,81 +30,10 @@ Conflict_resolver::~Conflict_resolver()
 }
 
 
-Preprocess::idx_pr Conflict_resolver::find_conflict_train(idx_t train)
-{
-	tim_t min_time = TIM_MAX;
-	idx_pr chunk = {IDX_MAX, IDX_MAX};
-
-	auto& train_idx = this->slvr.chunk_mngr->train_idx;
-	auto& time = this->slvr.chunk_mngr->time;
-
-	for (auto r : this->inst.res_range()) {
-		auto& res = this->slvr.chunk_mngr->res[r];
-
-		for (size_t i = 0; i + 1 < res.size; i++) {
-			idx_t a = res.chunks[i];
-			idx_t b = res.chunks[i + 1];
-
-			if ((train < IDX_MAX) && (train_idx[a] != train) && (train_idx[b] != train)) {
-				continue;
-			}
-
-			auto& a_t = time[a];
-			auto& b_t = time[b];
-
-			if (b_t.start >= min_time) {
-				break;
-			}
-
-			if (a_t.end > b_t.start) {
-				chunk = {res.chunks[i], res.chunks[i + 1]};
-				min_time = b_t.start;
-				break;
-			}
-		}
-	}
-
-	return chunk;
-}
-
-Preprocess::idx_pr Conflict_resolver::find_conflict_chunk(idx_t c)
-{
-	auto& time = this->slvr.chunk_mngr->time;
-	auto& train = this->slvr.chunk_mngr->train_idx;
-
-	idx_t r = this->slvr.chunk_mngr->res_idx[c];
-	auto& res = this->slvr.chunk_mngr->res[r];
-
-	auto& t_c = time[c];
-
-	for (auto x = res.chunks; x < res.chunks + res.size; x++) {
-		if (train[c] == train[*x]) {
-			continue;
-		}
-
-		auto& t_x = time[*x];
-
-		if ((t_x.start < t_c.end) && (t_x.end > t_c.start)) {
-			return {*x, c};
-		}
-
-		if ((t_c.start < t_x.end) && (t_c.end > t_x.start)) {
-			return {c, *x};
-		}
-	}
-
-	return {IDX_MAX, IDX_MAX};
-}
-
-
-
 void Conflict_resolver::add_conflict(idx_pr chunk)
 {
 	assert(chunk.first < this->prepr.n_chunks());
 	assert(chunk.second < this->prepr.n_chunks());
-	
-	auto& is_chunk_active = this->slvr.chunk_mngr->chunk_active;
-	assert(is_chunk_active[chunk.first] && is_chunk_active[chunk.second]);
 
 	bool default_val = false;
 	if (chunk.first > chunk.second) {
@@ -108,48 +44,37 @@ void Conflict_resolver::add_conflict(idx_pr chunk)
 	size_t idx = this->confs.size();
 	assert(this->confs.size() < IDX_MAX);
 
-	auto& train_idx = this->slvr.chunk_mngr->train_idx;
+	auto& train_idx = this->chunk_mngr.train_idx;
 
 	idx_t t1 = train_idx[chunk.first];
 	idx_t t2 = train_idx[chunk.second];
 
 	assert(t1 < t2);
 
-	this->slvr.link_graph.get_chain_conf(this->conf_chain, chunk);
-
-
 	Conflict conf;
 	conf.idx = (idx_t)idx;
 	conf.frozen = false;
-	conf.train = {t1, t2};
-	conf.active = {true, false}; // curr = true, old = false
+	conf.active = {true, false};
 	conf.value = {default_val};
 	conf.var = this->model.addVar(0, 1, 0, GRB_BINARY, format("conf_{}", idx));
 
-	for (auto& x : this->conf_chain) {
-		conf.chunks.push_back(x);
-	}
+	this->link_graph.get_chain_conf(chunk, conf.chunks);
 
 	this->confs.push_back(conf);
-
-	// cout << "conflict idx: " << conf.idx << 
-	// 	", trains: (" << t1 << ", " << t2 <<
-	// 	"), chunks: " << conf.chunks << endl;
 }
 
 
-void Conflict_resolver::add_cycle_cons()
+void Conflict_resolver::make_cycle_cons()
 {
-	auto& event_graph = this->slvr.event_graph;
-	assert(event_graph.cycle_found_vtx.size() > 0);
+	assert(this->event_graph.cycle_found_vtx.size() > 0);
 
 	auto& curr_confs = this->conf_hlpr;
 	auto& min_confs = this->conf_hlpr2;
 
 	idx_t min_size = IDX_MAX;
 
-	for (auto v : event_graph.cycle_found_vtx) {
-		event_graph.get_cycle_path(this->path, v);
+	for (auto v : this->event_graph.cycle_found_vtx) {
+		this->event_graph.get_cycle_path(this->path, v);
 
 		curr_confs.clear();
 		for (auto& x : this->path) {
@@ -157,6 +82,8 @@ void Conflict_resolver::add_cycle_cons()
 				curr_confs.push_back({x.e, 0});
 			}
 		}
+
+		make_unique(curr_confs);
 
 		if (min_size > curr_confs.size()) {
 			min_size = curr_confs.size();
@@ -169,24 +96,17 @@ void Conflict_resolver::add_cycle_cons()
 	Cycle_constr cycle_cons;
 	cycle_cons.confs = min_confs;
 
-	GRBLinExpr expr = 0;
 	for (auto& x : cycle_cons.confs) {
 		auto& conf = this->confs[x.idx];
-
 		x.value = conf.value.curr;
-		expr += conf.to_expr();
 	}
 
-	cycle_cons.model = this->model.addConstr(expr <= min_size - 1);
-	cycle_cons.model.set(GRB_IntAttr_Lazy, 1);
-
-	// this->purge_dominated_cycle(cycle_cons);
-
 	this->cycle_constrs.push_back(cycle_cons);
+	this->add_model_cycle_cons(cycle_cons);
 }
 
 
-bool Conflict_resolver::add_path_cons()
+bool Conflict_resolver::make_path_cons()
 {
 	this->sync_values();
 	// this->slvr.sync_graph();
@@ -196,23 +116,28 @@ bool Conflict_resolver::add_path_cons()
 	idx_t max_idx = IDX_MAX;
 
 	for (auto& obj : this->objs) {
-		if (!obj.active) { continue; }
-		if (obj.prepr->is_bin && (obj.value == 1)) { continue; }
+		if (obj.is_bin && (obj.value == 1)) {
+			continue;
+		}
 
-		tim_t time = this->slvr.time(obj.prepr->level);
-		if (time <= obj.prepr->threshold) {	continue; }
+		tim_t time = this->event_graph.time[obj.level];
+		if (time <= obj.threshold) {
+			continue;
+		}
 
-		tim_t delay = time - obj.prepr->threshold;
-		if (obj.prepr->is_bin) {
-			if (max_diff < obj.prepr->coeff) {
-				max_diff = obj.prepr->coeff;
+		tim_t delay = time - obj.threshold;
+		if (obj.is_bin) {
+			if (max_diff < obj.coeff) {
+				max_diff = obj.coeff;
 				max_idx = obj.idx;
 			}
 		}
 		else {
-			if (delay <= obj.value) { continue;	}
+			if (delay <= obj.value) {
+				continue;
+			}
 			
-			tim_t diff = obj.prepr->coeff*(delay - obj.value);
+			tim_t diff = obj.coeff*(delay - obj.value);
 			if (max_diff < diff) {
 				max_diff = diff;
 				max_delay = delay;
@@ -226,123 +151,31 @@ bool Conflict_resolver::add_path_cons()
 	}
 
 	auto& obj = this->objs[max_idx];
-	bool is_bin = obj.prepr->is_bin;
 
 	Path_constr path_cons;
 
 	path_cons.obj_idx = max_idx;
-	path_cons.is_bin = is_bin;
-	path_cons.delay = (is_bin ? 0 : max_delay);
+	path_cons.delay = (obj.is_bin ? 0 : max_delay);
 
 	path_cons.confs.clear();
-	this->slvr.event_graph.get_critical_path(this->path, obj.prepr->level);
+	this->event_graph.get_critical_path(this->path, obj.level);
 	for (auto& x : this->path) {
 		if (x.e < EDG_MAX) {
 			path_cons.confs.push_back({x.e, 0});
 		}
 	}
+
 	make_unique(path_cons.confs);
-
-	// cout << "path cons - idx: " << path_cons.obj_idx;
-	// if (is_bin) {
-	// 	cout << ", binary";
-	// }
-	// else {
-	// 	cout << ", delay: " << path_cons.delay;
-	// }
-	// cout << ", conf:";
-
-	GRBLinExpr expr = 0;
 
 	for (auto& x : path_cons.confs) {
 		auto& conf = this->confs[x.idx];
 		x.value = conf.value.curr;
-
-		expr += conf.to_expr();
 	}
-	
 
-	if (is_bin) {
-		path_cons.model = this->model.addConstr(expr - path_cons.confs.size() + 1 <= obj.var);
-	}
-	else {
-		path_cons.model = this->model.addConstr((expr - path_cons.confs.size() + 1)*path_cons.delay <= obj.var);
-	}
-	path_cons.model.set(GRB_IntAttr_Lazy, 3);
-
-	// this->purge_dominated_path(path_cons);
 	this->path_constrs.push_back(path_cons);
+	this->add_model_path_cons(path_cons);
 
 	return true;
-}
-
-
-void Conflict_resolver::make_crit_path_count()
-{
-	auto& crit_mp = this->crit_path_count;
-
-	crit_mp.clear();
-
-	for (auto& obj : this->objs) {
-		this->slvr.event_graph.get_critical_path(this->path, obj.prepr->level);
-		for (auto& x : this->path) {
-			if (x.e < EDG_MAX) {
-				auto& conf = this->confs[x.e];
-				crit_mp[conf.train.first] += 1;
-				crit_mp[conf.train.second] += 1;
-			}
-		}
-	}
-}
-
-
-void Conflict_resolver::purge_dominated_cycle(const Cycle_constr& cons)
-{
-	size_t i = 0;
-	while (i < this->cycle_constrs.size()) {
-		auto& x = this->cycle_constrs[i];
-
-		if (x.has_conf_subset(cons.confs)) {
-			this->model.remove(x.model);
-			x = this->cycle_constrs.back();
-			this->cycle_constrs.pop_back();
-		}
-		else {
-			i++;
-		}
-	}
-	
-	i = 0;
-	while (i < this->path_constrs.size()) {
-		auto& x = this->path_constrs[i];
-
-		if (x.has_conf_subset(cons.confs)) {
-			this->model.remove(x.model);
-			x = this->path_constrs.back();
-			this->path_constrs.pop_back();
-		}
-		else {
-			i++;
-		}
-	}
-}
-
-
-void Conflict_resolver::purge_dominated_path(const Path_constr& cons)
-{
-	size_t i = 0;
-	while (i < this->path_constrs.size()) {
-		auto& x = this->path_constrs[i];
-
-		if ((x.obj_idx == cons.obj_idx) && (x.delay <= cons.delay) && x.has_conf_subset(cons.confs)) {
-			this->model.remove(x.model);
-			x = this->path_constrs.back();
-			this->path_constrs.pop_back();
-		}
-		else {
-			i++;
-		}
-	}
 }
 
 
@@ -352,12 +185,12 @@ void Conflict_resolver::sync_graph()
 		if (conf.active.changed() || conf.value.changed()) {
 			if (conf.active.old) {
 				this->make_conf_edges(conf, conf.value.old);
-				this->slvr.event_graph.remove_edges(this->conf_edges);
+				this->event_graph.remove_edges(this->conf_edges);
 			}
 
 			if (conf.active.curr) {
 				this->make_conf_edges(conf, conf.value.curr);
-				this->slvr.event_graph.add_edges(this->conf_edges);
+				this->event_graph.add_edges(this->conf_edges);
 			}
 
 			conf.active.snap();
@@ -375,7 +208,55 @@ void Conflict_resolver::make_conf_edges(const Conflict& conf, int8_t value)
 			swap(x.first, x.second);
 		}
 
-		this->conf_edges.push_back(this->slvr.chunk_mngr->get_edge(x, conf.idx));
+		auto& state_a = this->chunk_mngr.state[x.first];
+		auto& state_b = this->chunk_mngr.state[x.second];
+
+		this->conf_edges.push_back({{state_a.level.end, state_b.level.end}, state_a.dur, conf.idx});
+	}
+}
+
+
+void Conflict_resolver::set_ops(const Flag& op_active)
+{
+	Flag op_change(this->inst.n_ops());
+	op_change.fill(true);
+
+	this->link_graph.op_change(op_change);
+	this->link_graph.sync_links(op_active);
+
+	this->chunk_mngr.op_change(op_change);
+	this->chunk_mngr.sync_state(op_active);
+
+	this->event_graph.clear_edges();
+
+	op_active.get_true_list(this->flag_list);
+	for (auto o : this->flag_list) {
+		auto& op = this->prepr.ops[o];
+
+		this->event_graph.set_time_lb(op.level.start, op.inst->start_lb);
+		this->event_graph.add_edge({op.level, op.inst->dur, EDG_MAX});
+
+		if (op.inst->obj != IDX_MAX) {
+			auto& obj_i = this->inst.objs[op.inst->obj];
+
+			Obj obj;
+
+			obj.idx = (idx_t)this->objs.size();
+			obj.level = op.level.start;
+			obj.is_bin = obj_i.increment > 0;
+			obj.coeff = obj.is_bin ? obj_i.increment : obj_i.coeff;
+			obj.threshold = obj_i.threshold;
+
+			if (obj.is_bin) {
+				obj.var = this->model.addVar(0, 1, obj.coeff, GRB_BINARY, format("obj_{}", obj.idx));
+			}
+			else {
+				obj.var = this->model.addVar(0, GRB_INFINITY, obj.coeff, GRB_CONTINUOUS, 
+					format("obj_{}", obj.idx));
+			}
+
+			this->objs.push_back(obj);
+		}
 	}
 }
 
@@ -383,10 +264,16 @@ void Conflict_resolver::make_conf_edges(const Conflict& conf, int8_t value)
 int Conflict_resolver::optimize_model()
 {
 	int status = GBR_EXCEPTION;
+	int state = FAILED;
+
 	bool done = false;
 	while(!done) {
 		try {
-			this->model.update();
+			if (this->need_model_update) {
+				this->model.update();
+				this->need_model_update = false;
+			}
+
 			this->model.optimize();
 			status = this->model.get(GRB_IntAttr_Status);
 		}
@@ -400,11 +287,12 @@ int Conflict_resolver::optimize_model()
 		  case GRB_OPTIMAL:
 			this->sync_values();
 			done = true;
+			state = OPTIMAL;
 			break;
 
 		  case GRB_CUTOFF:
 		    done = true;
-			return Solver::CUTOFF;
+			state = CUTOFF;
 			break;
 		
 		  case GRB_INFEASIBLE:
@@ -418,7 +306,7 @@ int Conflict_resolver::optimize_model()
 		}
 	}
 
-	return Solver::OPTIMAL;
+	return state;
 }
 
 
@@ -431,8 +319,6 @@ void Conflict_resolver::sync_values()
 	}
 
 	for (auto& obj : this->objs) {
-		if (!obj.active) { continue; }
-
 		obj.value = round(obj.var.get(GRB_DoubleAttr_X));
 	}
 }
@@ -478,106 +364,10 @@ void Conflict_resolver::unfreeze_iis()
 }
 
 
-void Conflict_resolver::freeze_conflicts()
+void Conflict_resolver::init_model()
 {
-	for (auto& conf : this->confs) {
-		conf.freeze();
-	}
-}
-
-void Conflict_resolver::clear_constrs(bool keep_critical)
-{
-	for (auto& constr : this->cycle_constrs) {
-		this->model.remove(constr.model);
-	}
-
-	this->cycle_constrs.clear();
-
-	if (keep_critical) {
-		size_t i = 0;
-		while (i < this->path_constrs.size()) {
-			auto& x = this->path_constrs[i];
-
-			bool required = false;
-			if (x.is_bin || x.delay >= this->objs[x.obj_idx].value) {
-				if (this->is_cons_conf_active(x)) {
-					required = true;
-				}
-			}
-
-			if (!required) {
-				this->model.remove(x.model);
-				x = this->path_constrs.back();
-				this->path_constrs.pop_back();
-			}
-			else {
-				i++;
-			}
-		}
-	}
-	else {
-		for (auto& constr : this->path_constrs) {
-			this->model.remove(constr.model);
-		}
-	}
-
-	this->path_constrs.clear();
-}
-
-
-void Conflict_resolver::unfreeze_train_confs(idx_t train)
-{
-	for (auto& conf : this->confs) {
-		if (conf.train.first == train || conf.train.second == train) {
-			conf.unfreeze();
-		}
-	}
-}
-
-
-bool Conflict_resolver::is_cons_conf_active(const Constr& cons)
-{
-	for (auto& x : cons.confs) {
-		if (this->confs[x.idx].value.curr != x.value) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-void Conflict_resolver::init_data()
-{
-	this->init_chunks();
-	this->init_objs();
-}
-
-
-void Conflict_resolver::init_chunks()
-{
-	this->chunk_conf.resize(this->prepr.n_chunks());
-}
-
-
-void Conflict_resolver::init_objs()
-{
-	this->objs.resize(this->prepr.n_objs());
-
-	for (auto i : this->prepr.objs_range()) {
-		auto& obj = this->objs[i];
-		obj.idx = i;
-		obj.active = true;
-		obj.prepr = &this->prepr.objs[i];
-
-		string name = format("obj_{}", obj.idx);
-		if (obj.prepr->is_bin) {
-			obj.var = this->model.addVar(0, 1, obj.prepr->coeff, GRB_BINARY, name);
-		}
-		else {
-			obj.var = this->model.addVar(0, GRB_INFINITY, obj.prepr->coeff, GRB_CONTINUOUS, name);
-		}
-	}
+	this->model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+	this->model.set(GRB_DoubleAttr_MIPGap, 0.5);
 }
 
 
@@ -593,11 +383,56 @@ Conflict_resolver::tim_t Conflict_resolver::get_obj_val()
 	}
 }
 
-void Conflict_resolver::set_obj_ub(tim_t bound)
+void Conflict_resolver::remove_cons(Constr& cons)
 {
-	this->model.set(GRB_DoubleParam_Cutoff, bound);
+	if (!cons.in_model) {
+		return;
+	}
+
+	this->model.remove(cons.model);
+	this->need_model_update = true;
+	cons.in_model = false;
 }
 
+
+void Conflict_resolver::add_model_cycle_cons(Cycle_constr& cons)
+{
+	if (cons.in_model) {
+		return;
+	}
+
+	GRBLinExpr expr = 0;
+	for (auto x : cons.confs) {
+		expr += this->confs[x.idx].to_expr(x.value);
+	}
+
+	cons.model = this->model.addConstr(expr <= cons.confs.size() - 1);
+	cons.model.set(GRB_IntAttr_Lazy, 1);
+}
+
+
+void Conflict_resolver::add_model_path_cons(Path_constr& cons)
+{
+	if (cons.in_model) {
+		return;
+	}
+
+	GRBLinExpr expr = 0;
+	for (auto x : cons.confs) {
+		expr += this->confs[x.idx].to_expr(x.value);
+	}
+
+	auto& obj = this->objs[cons.obj_idx];
+
+	if (obj.is_bin) {
+		cons.model = this->model.addConstr(expr - cons.confs.size() + 1 <= obj.var);
+	}
+	else {
+		cons.model = this->model.addConstr((expr - cons.confs.size() + 1)*cons.delay <= obj.var);
+	}
+
+	cons.model.set(GRB_IntAttr_Lazy, 3);
+}
 
 
 void Conflict_resolver::Conflict::freeze()
@@ -625,46 +460,5 @@ void Conflict_resolver::Conflict::unfreeze()
 	this->frozen = false;
 }
 
-bool Conflict_resolver::Constr::has_conf_subset(const vector<Conf_assign>& subset) const
-{
-	size_t m = this->confs.size();
-	size_t n = subset.size();
 
-	if (m < n) {
-		return false;
-	}
-
-	size_t i = 0;
-	size_t j = 0;
-
-	while (i < m && j < n) {
-		auto& a = this->confs[i];
-		auto& b = this->confs[j];
-
-		if (a.idx < b.idx) {
-			i++;
-		}
-
-		else if (a.idx > b.idx) {
-			j++;
-		}
-
-		else { // equal
-			if (a.value != b.value) {
-				return false;
-			}
-
-			i++;
-			j++;
-		}
-	}
-
-
-	if (j == n ) {
-		return true; // matched all elements of subset
-	}
-	
-
-	return false;
-}
 

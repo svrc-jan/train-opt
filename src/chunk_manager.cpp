@@ -38,7 +38,6 @@ void Chunk_manager::init_ops()
 
 void Chunk_manager::init_levels()
 {
-	this->level_time.resize(this->prepr.n_levels(), 0);
 	this->level_chunks.resize(this->prepr.n_levels());
 }
 
@@ -109,15 +108,12 @@ void Chunk_manager::op_change(const Flag& op_change_flag)
 }
 
 
-void Chunk_manager::time_change(const std::vector<pair<idx_t, tim_t>>& level_time_change)
+void Chunk_manager::time_change(const Flag& level_time_change)
 {
-	for (auto& x : level_time_change) {
-		if (level_time[x.first] != x.second) {
-			level_time[x.first] = x.second;
-
-			for (auto c : this->level_chunks[x.first]) {
-				this->time_dirty += c;
-			}
+	level_time_change.get_true_list(this->flag_list);
+	for (auto& l : this->flag_list) {
+		for (auto c : this->level_chunks[l]) {
+			this->time_dirty += c;
 		}
 	}
 }
@@ -164,7 +160,7 @@ void Chunk_manager::sync_state(const Flag& op_active)
 }
 
 
-void Chunk_manager::sync_time()
+void Chunk_manager::sync_time(const vector<tim_t>& level_time)
 {
 	this->time_dirty.get_true_list(this->flag_list);
 	for (auto c : this->flag_list) {
@@ -174,8 +170,8 @@ void Chunk_manager::sync_time()
 		Interval<tim_t> new_time;
 
 		if (this->is_active[c]) {
-			new_time.start = this->level_time[state.level.start];
-			new_time.end = this->level_time[state.level.end] + state.dur;
+			new_time.start = level_time[state.level.start];
+			new_time.end = level_time[state.level.end] + state.dur;
 		}
 		else {
 			new_time = {TIM_MAX, TIM_MAX};
@@ -246,6 +242,51 @@ void Chunk_manager::get_all_conflicts(vector<idx_pr>& confs, double stretch)
 			}
  		}
 	}
+}
+
+
+Preprocess::idx_pr Chunk_manager::get_earliest_conflict()
+{
+	idx_pr min_conf = {IDX_MAX, IDX_MAX};
+	tim_t min_time = TIM_MAX;
+
+	for (auto r : this->inst.res_range()) {
+		auto& res = this->res[r];
+
+		for (idx_t i = 0; i < res.size; i++) {
+			idx_t c_a = res.chunks[i];
+			auto& t_a = this->time[c_a];
+
+			if (t_a.start == TIM_MAX || t_a.end <= min_time) {
+				break;
+			}
+
+			for (idx_t j = i + 1; j < res.size; j++) {
+				idx_t c_b = res.chunks[j];
+
+				if (this->train_idx[c_a] == this->train_idx[c_b]) {
+					continue;
+				}
+
+				auto& t_b = this->time[c_b];
+
+				if (t_b.start <= min_time || t_b.end == TIM_MAX) {
+					break;
+				}
+			
+				if (t_a.end > t_b.start) {
+					min_time = t_b.start;
+					min_conf = {c_a, c_b};
+				}
+				else {
+					break;
+				}
+			}
+ 		}
+	}
+
+	return min_conf;
+
 }
 
 

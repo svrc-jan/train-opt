@@ -138,8 +138,6 @@ private:
 
 	void verify_chunks();
 
-	void make_objs();
-
 	bool ops_reachable(const std::vector<idx_t>& vec_from, const std::vector<idx_t>& vec_to);
 };
 

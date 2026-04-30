@@ -87,7 +87,8 @@ void Route_planner::estimate_level_times()
 		changes.push_back({l, this->level_time[l]});
 	}
 
-	this->chunk_mngr.time_change(changes);
+	Flag level_change(this->prepr.n_levels());
+	this->chunk_mngr.time_change(level_change);
 }
 
 
@@ -98,7 +99,7 @@ void Route_planner::make_train_conflicts()
 
 	this->chunk_mngr.op_change(this->op_change);
 	this->chunk_mngr.sync_state(this->op_active);
-	this->chunk_mngr.sync_time();
+	this->chunk_mngr.sync_time(this->level_time);
 
 	std::vector<idx_pr> confs;
 	this->chunk_mngr.get_all_conflicts(confs, 0.3);
@@ -132,8 +133,10 @@ void Route_planner::make_init_routes()
 	this->freeze_all();
 
 	this->update_all_ops();
+	this->op_change.fill(1);
 	this->link_graph.op_change(this->op_change);
 	this->link_graph.sync_links(this->op_active);
+	this->op_change.clear();
 }
 
 
@@ -153,6 +156,7 @@ void Route_planner::optimize_routes()
 
 	shuffle(sect_order.begin(), sect_order.end(), default_random_engine());
 	for (auto s : sect_order) {
+
 		auto& sect = this->prepr.sects[s];
 
 		this->price_routes(sect.routes);
@@ -162,8 +166,13 @@ void Route_planner::optimize_routes()
 
 		this->update_values(sect.routes);
 		this->update_ops(sect.routes);
+		this->link_graph.op_change(this->op_change);
+		this->link_graph.sync_links(this->op_active);
+		this->op_change.clear();
 
 		this->freeze_routes(sect.routes);
+
+		// cout << "curr cost: " << this->get_cost_sum() << endl;
 	}
 
 	this->link_graph.op_change(this->op_change);
@@ -195,7 +204,7 @@ void Route_planner::price_routes(C& routes)
 
 	for (idx_t r : routes) {
 		auto& route = this->routes[r];
-		route.active.curr = true;
+		route.active.curr = false;
 
 		this->update_ops(routes);
 		this->link_graph.op_change(this->op_change);
@@ -449,7 +458,7 @@ void Route_planner::init_data()
 
 void Route_planner::init_model()
 {
-	this->model.set(GRB_IntAttr_ModelSense, GRB_MAXIMIZE);
+	this->model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 	
 	this->find_req_routes();
 	this->add_route_vars();

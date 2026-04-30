@@ -49,14 +49,12 @@ target_link_libraries(instance_test instance)
 add_executable(preprocess_stats apps/preprocess_stats.cpp)
 target_link_libraries(preprocess_stats preprocess)
 
-add_executable(graph_test apps/graph_test.cpp)
-target_link_libraries(graph_test event_graph)
-
 add_executable(link_test apps/link_test.cpp)
 target_link_libraries(link_test link_graph)
 
-add_executable(solver_test apps/solver_test.cpp)
-target_link_libraries(solver_test solver)
-
 add_executable(route_impr apps/route_impr.cpp)
 target_link_libraries(route_impr route_planner)
+
+add_executable(conflict_test apps/conflict_test.cpp)
+target_link_libraries(conflict_test path_planner conflict_resolver)
+

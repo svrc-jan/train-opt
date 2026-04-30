@@ -41,8 +41,7 @@ public:
 	void sync_links(const Flag& op_active);
 
 	void get_chain_len(const std::vector<idx_pr>& confs, std::vector<idx_t>& len);
-
-	idx_t median_chain();
+	void get_chain_conf(idx_pr start, std::vector<idx_pr>& confs);
 
 private:
 	

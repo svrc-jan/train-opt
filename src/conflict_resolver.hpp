@@ -1,13 +1,21 @@
 #pragma once
 
-#include "utils/unord_pair.hpp"
-#include "solver.hpp"
+#include "gurobi_c++.h"
+
+#include "utils/tracked.hpp"
+#include "instance.hpp"
+#include "preprocess.hpp"
+#include "link_graph.hpp"
+#include "event_graph.hpp"
+#include "chunk_manager.hpp"
 
 class Solver;
 
 class Conflict_resolver
 {
 public:
+	enum Opt_state {FAILED, OPTIMAL, CUTOFF};
+
 	struct Conflict;
 	struct Obj;
 	
@@ -32,29 +40,15 @@ public:
 
 	std::map<idx_t, idx_t> crit_path_count;
 	
-	Conflict_resolver(Solver& solver);
+	Conflict_resolver(const Preprocess& prepr, Link_graph& link_graph, 
+		Chunk_manager& chunk_mrng, GRBEnv& grb_env);
+
 	~Conflict_resolver();
 
-	void init_data();
+	void set_ops(const Flag& op_active);
+	void solve();
 
-	void sync_graph();
-	int optimize_model();
-
-	idx_pr find_conflict_train(idx_t train);
-	idx_pr find_conflict_chunk(idx_t chunk);
-
-	void make_crit_path_count();
-
-	void add_conflict(idx_pr chunk);
-	void add_cycle_cons();
-	bool add_path_cons();
-
-	void freeze_conflicts();
-	void clear_constrs(bool keep_critical=true);
-	void unfreeze_train_confs(idx_t train);
-	
 	tim_t get_obj_val();
-	void set_obj_ub(tim_t bound);
 
 
 private:
@@ -63,14 +57,14 @@ private:
 	struct Path_constr;
 	struct Conf_assign;
 
-	Solver& slvr;
+	Link_graph& link_graph;
+	Chunk_manager chunk_mngr;
 	GRBModel model;
 
+	Event_graph event_graph;
+	
 	std::vector<Conflict> confs = {};
 	std::vector<Obj> objs = {};
-
-	std::vector<idx_t> chunk_conf = {};
-	std::vector<std::vector<idx_t>> train_conf = {};
 
 	std::vector<Event_graph::Vertex_edge> path = {};
 
@@ -79,24 +73,29 @@ private:
 
 	std::vector<Conf_assign> conf_hlpr = {};
 	std::vector<Conf_assign> conf_hlpr2 = {};
-	
-	std::set<idx_pr> conf_chain;
+
 	std::vector<Edge> conf_edges;
+	std::vector<idx_t> flag_list;
+
+	int8_t need_model_update = false;
+
+	void add_conflict(idx_pr chunk);
+	void make_cycle_cons();
+	bool make_path_cons();
+
+	void sync_graph();
+	void make_conf_edges(const Conflict& conf, int8_t value);
 
 
-	void init_chunks();
-	void init_objs();
-	void init_trains();
-
+	void init_model();
+	int optimize_model();
 	void unfreeze_iis();
 	void sync_values();
 
-	void purge_dominated_cycle(const Cycle_constr& cons);
-	void purge_dominated_path(const Path_constr& cons);
 
-	void make_conf_edges(const Conflict& conf, int8_t);
-
-	bool is_cons_conf_active(const Constr& cons);
+	void remove_cons(Constr& cons);
+	void add_model_cycle_cons(Cycle_constr& cons);
+	void add_model_path_cons(Path_constr& cons);
 
 };
 
@@ -105,7 +104,6 @@ struct Conflict_resolver::Conflict
 {
 	idx_t idx = IDX_MAX;
 	int8_t frozen = false;
-	idx_pr train = {IDX_MAX, IDX_MAX};
 	Tracked<int8_t> active = false;
 	Tracked<int8_t> value = false;
 
@@ -113,7 +111,6 @@ struct Conflict_resolver::Conflict
 	GRBVar var;
 
 	GRBLinExpr to_expr(int8_t x) const { return (x ? var : (1 - var)); }
-	GRBLinExpr to_expr() const { return this->to_expr(this->value.curr); }
 
 	void freeze();
 	void unfreeze();
@@ -123,9 +120,11 @@ struct Conflict_resolver::Conflict
 struct Conflict_resolver::Obj
 {
 	idx_t idx = IDX_MAX;
-	uint8_t active = true;
+	idx_t level = IDX_MAX;
+	int8_t is_bin = false;
+	dur_t coeff = 0;
+	tim_t threshold = 0;
 	tim_t value = 0;
-	const Preprocess::Obj* prepr = nullptr;
 	GRBVar var;
 };
 
@@ -134,8 +133,7 @@ struct Conflict_resolver::Constr
 {
 	std::vector<Conf_assign> confs = {};
 	GRBConstr model;
-
-	bool has_conf_subset(const std::vector<Conf_assign>& subset) const;
+	int8_t in_model = false;
 };
 
 
@@ -148,7 +146,6 @@ struct Conflict_resolver::Cycle_constr : Conflict_resolver::Constr
 struct Conflict_resolver::Path_constr : Conflict_resolver::Constr
 {
 	idx_t obj_idx = IDX_MAX;
-	uint8_t is_bin = false;
 	tim_t delay = 0;
 };
 

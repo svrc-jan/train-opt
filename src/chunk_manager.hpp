@@ -38,12 +38,13 @@ public:
 	~Chunk_manager();
 
 	void op_change(const Flag& op_change);
-	void time_change(const std::vector<std::pair<idx_t, tim_t>>& level_time_change);
+	void time_change(const Flag& level_time_change);
 
 	void sync_state(const Flag& op_active);
-	void sync_time();
+	void sync_time(const std::vector<tim_t>& level_time);
 
 	void get_all_conflicts(std::vector<idx_pr>& confs, double stretch=0.0);
+	idx_pr get_earliest_conflict();
 
 private:
 	struct Time_cmp;
@@ -53,7 +54,6 @@ private:
 	Flag res_dirty;
 
 	std::vector<idx_t> res_data = {};
-	std::vector<tim_t> level_time = {};
 	std::vector<std::vector<idx_t>> level_chunks = {};
 
 	std::vector<idx_t> flag_list;

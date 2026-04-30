@@ -421,6 +421,20 @@ void Link_graph::get_chain_len(const vector<idx_pr>& confs, vector<idx_t>& len)
 }
 
 
+void Link_graph::get_chain_conf(idx_pr start, vector<idx_pr>& confs)
+{
+	this->conf_done.clear();
+	this->chain.clear();
+
+	this->chain_search(this->conf_map[CONF_HASH(start.first, start.second)], false);
+
+	confs.clear();
+	for (auto& x : this->chain) {
+		confs.push_back(this->confs[x].chunk);
+	}
+}
+
+
 void Link_graph::chain_search(lnk_t k, bool need_opp)
 {
 	if (this->conf_done[k]) {

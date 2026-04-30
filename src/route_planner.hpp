@@ -35,6 +35,7 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
+	Flag op_active;
 	Flag op_change;
 
 	Route_planner(const Preprocess& prepr, Link_graph& link_graph, 
@@ -58,8 +59,7 @@ private:
 	Link_graph& link_graph;
 	Chunk_manager& chunk_mngr;
 	GRBModel model;
-
-    Flag op_active;
+    
 	std::vector<idx_t> flag_list = {};
 
 	std::vector<Route> routes = {};
