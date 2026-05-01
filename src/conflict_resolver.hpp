@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include "gurobi_c++.h"
 
 #include "utils/tracked.hpp"
@@ -38,15 +40,15 @@ public:
 	const Instance& inst;
 	const Preprocess& prepr;
 
-	std::map<idx_t, idx_t> crit_path_count;
-	
+
 	Conflict_resolver(const Preprocess& prepr, Link_graph& link_graph, 
-		Chunk_manager& chunk_mrng, GRBEnv& grb_env);
+		Chunk_manager& chunk_mngr, GRBEnv& grb_env);
 
 	~Conflict_resolver();
 
-	void set_ops(const Flag& op_active);
 	void solve();
+	void set_ops(const Flag& op_active);
+	void clear_all();
 
 	tim_t get_obj_val();
 
@@ -58,7 +60,7 @@ private:
 	struct Conf_assign;
 
 	Link_graph& link_graph;
-	Chunk_manager chunk_mngr;
+	Chunk_manager& chunk_mngr;
 	GRBModel model;
 
 	Event_graph event_graph;
@@ -77,7 +79,14 @@ private:
 	std::vector<Edge> conf_edges;
 	std::vector<idx_t> flag_list;
 
+	Flag level_time_change;
 	int8_t need_model_update = false;
+
+	std::chrono::steady_clock::time_point solve_start;
+	std::chrono::steady_clock::time_point solve_timeout;
+	size_t timeout = 600;
+
+	bool resolve_conflicts();
 
 	void add_conflict(idx_pr chunk);
 	void make_cycle_cons();
@@ -86,16 +95,19 @@ private:
 	void sync_graph();
 	void make_conf_edges(const Conflict& conf, int8_t value);
 
+	void init_levels();
 
 	void init_model();
 	int optimize_model();
 	void unfreeze_iis();
 	void sync_values();
 
-
 	void remove_cons(Constr& cons);
 	void add_model_cycle_cons(Cycle_constr& cons);
 	void add_model_path_cons(Path_constr& cons);
+
+	void remove_non_binding();
+	
 
 };
 

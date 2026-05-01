@@ -3,6 +3,7 @@
 
 #include <format>
 
+
 #include "utils/aux.hpp"
 #include "utils/stl_print.hpp"
 
@@ -15,12 +16,13 @@ using namespace std;
 
 
 Conflict_resolver::Conflict_resolver(const Preprocess& prepr, Link_graph& link_graph, 
-	Chunk_manager& chunk_mrng, GRBEnv& grb_env)
+		Chunk_manager& chunk_mngr, GRBEnv& grb_env)
 	: inst(prepr.inst), prepr(prepr), link_graph(link_graph), 
 	  chunk_mngr(chunk_mngr), model(GRBModel(grb_env))
 {
 	this->event_graph.set_n_vtx(this->prepr.n_levels());
 	this->init_model();
+	this->init_levels();
 };
 
 
@@ -30,10 +32,86 @@ Conflict_resolver::~Conflict_resolver()
 }
 
 
+void Conflict_resolver::solve()
+{
+	this->solve_start = chrono::steady_clock::now();
+	this->solve_timeout = this->solve_start + chrono::seconds(this->timeout);
+
+	tim_t last_obj = TIM_MAX;
+
+	while (true) {
+		if (this->resolve_conflicts()) {
+			tim_t obj = this->get_obj_val();
+			if (obj >= last_obj) {
+				cout << "no obj improvement" << endl;
+				break;
+			}
+
+			auto diff = (chrono::steady_clock::now() - this->solve_start);
+			int ms = round(chrono::duration<double, milli>(diff).count());
+			cout << "solution, time: " << ms << "ms, obj: " << obj << endl;
+
+			last_obj = obj;
+		}
+		else {
+			cout << "timeout" << endl;
+			break;
+		}
+
+		double old_mip_gap = this->model.get(GRB_DoubleParam_MIPGap);
+		this->model.set(GRB_DoubleParam_MIPGap, old_mip_gap/5);
+	}
+
+	cout << "confs: " << this->confs.size() << 
+		", cycle: " << this->cycle_constrs.size() << 
+		", path: " << this->path_constrs.size() << endl;
+}
+
+
+bool Conflict_resolver::resolve_conflicts()
+{
+
+	while (chrono::steady_clock::now() < this->solve_timeout) {
+		this->optimize_model();
+		this->sync_graph();
+		auto ret = this->event_graph.sync(this->level_time_change);
+		
+		if (ret == Event_graph::CYCLE_FOUND) {
+			this->make_cycle_cons();
+			continue;
+		}
+
+		if (this->make_path_cons()) {
+			continue;
+		}
+
+		// this->remove_non_binding();
+
+		this->chunk_mngr.time_change(this->level_time_change);
+		this->chunk_mngr.sync_time(this->event_graph.time);
+		this->level_time_change.clear();
+
+		auto conf = this->chunk_mngr.get_earliest_conflict();
+		if (conf.first == IDX_MAX) {
+			return true;
+			break;
+		}
+
+		this->add_conflict(conf);
+	}
+
+
+	return false;
+}
+
+
+
 void Conflict_resolver::add_conflict(idx_pr chunk)
 {
 	assert(chunk.first < this->prepr.n_chunks());
 	assert(chunk.second < this->prepr.n_chunks());
+	assert(this->chunk_mngr.is_active[chunk.first]);
+	assert(this->chunk_mngr.is_active[chunk.second]);
 
 	bool default_val = false;
 	if (chunk.first > chunk.second) {
@@ -61,6 +139,8 @@ void Conflict_resolver::add_conflict(idx_pr chunk)
 	this->link_graph.get_chain_conf(chunk, conf.chunks);
 
 	this->confs.push_back(conf);
+
+	// cout << "conf, idx: " << conf.idx << ", chunks: " << conf.chunks << endl;
 }
 
 
@@ -211,7 +291,9 @@ void Conflict_resolver::make_conf_edges(const Conflict& conf, int8_t value)
 		auto& state_a = this->chunk_mngr.state[x.first];
 		auto& state_b = this->chunk_mngr.state[x.second];
 
-		this->conf_edges.push_back({{state_a.level.end, state_b.level.end}, state_a.dur, conf.idx});
+		assert(state_a.level.end < IDX_MAX && state_b.level.start < IDX_MAX);
+
+		this->conf_edges.push_back({{state_a.level.end, state_b.level.start}, state_a.dur, conf.idx});
 	}
 }
 
@@ -364,11 +446,22 @@ void Conflict_resolver::unfreeze_iis()
 }
 
 
+void Conflict_resolver::init_levels()
+{
+	this->level_time_change.set_n_items(this->prepr.n_levels());
+}
+
+
 void Conflict_resolver::init_model()
 {
 	this->model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-	this->model.set(GRB_DoubleAttr_MIPGap, 0.5);
+	this->model.set(GRB_IntParam_LazyConstraints, 1);
+	this->model.set(GRB_DoubleParam_MIPGap, 0.2);
+	// this->model.set(GRB_IntParam_MIPFocus, 3);
+
+	this->need_model_update = true;
 }
+
 
 
 Conflict_resolver::tim_t Conflict_resolver::get_obj_val()
@@ -407,7 +500,21 @@ void Conflict_resolver::add_model_cycle_cons(Cycle_constr& cons)
 	}
 
 	cons.model = this->model.addConstr(expr <= cons.confs.size() - 1);
-	cons.model.set(GRB_IntAttr_Lazy, 1);
+
+	int lazy = 0;
+	if (cons.confs.size() > 3) {
+		lazy = 1;
+	}
+
+	if (cons.confs.size() > 5) {
+		lazy = 2;
+	}
+
+	if (cons.confs.size() > 9) {
+		lazy = 3;
+	}
+
+	cons.model.set(GRB_IntAttr_Lazy, lazy);
 }
 
 
@@ -461,4 +568,47 @@ void Conflict_resolver::Conflict::unfreeze()
 }
 
 
+void Conflict_resolver::remove_non_binding()
+{
+	for (auto& cons : this->cycle_constrs) {
+		if (cons.in_model) {
+			if (cons.model.get(GRB_DoubleAttr_Slack) + 1e-4 > 0) {
+				this->remove_cons(cons);
+			}
+		}
+	}
 
+
+	for (auto& cons : this->path_constrs) {
+		if (cons.in_model) {
+			if (cons.model.get(GRB_DoubleAttr_Slack) + 1e-4 > 0) {
+				this->remove_cons(cons);
+			}
+		}
+	}
+}
+
+void Conflict_resolver::clear_all()
+{
+	auto conss = this->model.getConstrs();
+	size_t n_cons = this->model.get(GRB_IntAttr_NumConstrs);
+
+	for (size_t i = 0; i < n_cons; i++) {
+		this->model.remove(conss[i]);
+	}
+
+
+	auto vars = this->model.getVars();
+	size_t n_var = this->model.get(GRB_IntAttr_NumVars);
+
+	for (size_t i = 0; i < n_var; i++) {
+		this->model.remove(vars[i]);
+	}
+
+	this->model.update();
+
+	this->path_constrs.clear();
+	this->cycle_constrs.clear();
+	this->confs.clear();
+	this->objs.clear();
+}

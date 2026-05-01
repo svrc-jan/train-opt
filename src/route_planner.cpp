@@ -124,6 +124,8 @@ void Route_planner::make_train_conflicts()
 	}
 
 	this->conf_chain_len.reserve(max_conf);
+
+	this->op_active.clear();
 }
 
 
@@ -131,8 +133,9 @@ void Route_planner::make_init_routes()
 {
 	this->get_random_routes();
 	this->freeze_all();
-
 	this->update_all_ops();
+	this->verify_ops();
+
 	this->op_change.fill(1);
 	this->link_graph.op_change(this->op_change);
 	this->link_graph.sync_links(this->op_active);
@@ -178,8 +181,39 @@ void Route_planner::optimize_routes()
 	this->link_graph.op_change(this->op_change);
 	this->link_graph.sync_links(this->op_active);
 	this->op_change.clear();
+
+	this->verify_ops();
 }
 
+
+
+void Route_planner::verify_ops()
+{
+	for (auto& train : this->inst.trains) {
+		auto o = train.op_first;
+
+		while (true) {
+			auto& op = this->prepr.ops[o];
+			assert(this->op_active[o]);
+			
+			if (op.inst->succ.size() == 0) {
+				break ;
+			}
+
+			idx_t s = IDX_MAX;
+			for (auto& x : op.inst->succ) {
+				if (this->op_active[x]) {
+					assert(s == IDX_MAX);
+					s = x;
+				}
+			}
+
+			assert(s != IDX_MAX);
+			
+			o = s;
+		}
+	}
+}
 
 
 template<typename C>
@@ -264,21 +298,21 @@ void Route_planner::update_ops(C& routes)
 	// this->op_change.clear();
 	for (auto r : routes) {
 		auto& route = this->routes[r];
-		if (!route.active.changed()) {
-			continue;
-		}
-
-		if (route.active.old) {
+		if (route.active.curr) {
 			for (auto o : route.prepr->ops) {
-				this->op_active -= o;
-				this->op_change += o;
+				if (!this->op_active[o]) {
+					this->op_active += o;
+					this->op_change += o;
+				}
 			}
 		}
 
-		if (route.active.curr) {
+		else {
 			for (auto o : route.prepr->ops) {
-				this->op_active += o;
-				this->op_change += o;
+				if (this->op_active[o]) {
+					this->op_active -= o;
+					this->op_change += o;
+				}
 			}
 		}
 
@@ -412,6 +446,23 @@ void Route_planner::add_flow_constr()
 	}
 }
 
+
+void Route_planner::add_inva_constr()
+{
+	for (auto& junct : this->prepr.juncts) {
+		for (auto& x : junct.inva_trans) {
+			idx_t a = this->prepr.ops[x.first].route;
+			idx_t b = this->prepr.ops[x.second].route;
+			
+			auto& v_a = this->routes[a].var;
+			auto& v_b = this->routes[b].var;
+
+			this->inva_constr.push_back(this->model.addConstr(v_a + v_b <= 1));
+		}
+	}
+}
+
+
 template<typename C>
 void Route_planner::freeze_routes(C& routes)
 {
@@ -463,6 +514,7 @@ void Route_planner::init_model()
 	this->find_req_routes();
 	this->add_route_vars();
 	this->add_flow_constr();
+	this->add_inva_constr();
 	this->model.write("route.lp");
 }
 

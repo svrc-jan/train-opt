@@ -55,6 +55,6 @@ target_link_libraries(link_test link_graph)
 add_executable(route_impr apps/route_impr.cpp)
 target_link_libraries(route_impr route_planner)
 
-add_executable(conflict_test apps/conflict_test.cpp)
-target_link_libraries(conflict_test path_planner conflict_resolver)
+add_executable(conflict_solve apps/conflict_solve.cpp)
+target_link_libraries(conflict_solve route_planner conflict_resolver)
 

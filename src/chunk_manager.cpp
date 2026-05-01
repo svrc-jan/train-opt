@@ -140,7 +140,7 @@ void Chunk_manager::sync_state(const Flag& op_active)
 				op.level.start : new_state.level.start;
 
 			new_state.level.end = op.level.end;
-			new_state.dur = op.inst->res.find_asc(chunk.res)->dur;
+			new_state.dur = MIN(op.inst->res.find_asc(chunk.res)->dur, 1);
 		}
 
 		auto& state = this->state[c];
@@ -253,11 +253,11 @@ Preprocess::idx_pr Chunk_manager::get_earliest_conflict()
 	for (auto r : this->inst.res_range()) {
 		auto& res = this->res[r];
 
-		for (idx_t i = 0; i < res.size; i++) {
+		for (idx_t i = 0; i + 1 < res.size; i++) {
 			idx_t c_a = res.chunks[i];
 			auto& t_a = this->time[c_a];
 
-			if (t_a.start == TIM_MAX || t_a.end <= min_time) {
+			if (t_a.start == TIM_MAX || t_a.end >= min_time) {
 				break;
 			}
 
@@ -270,11 +270,14 @@ Preprocess::idx_pr Chunk_manager::get_earliest_conflict()
 
 				auto& t_b = this->time[c_b];
 
-				if (t_b.start <= min_time || t_b.end == TIM_MAX) {
+				if (t_b.start >= min_time || t_b.end == TIM_MAX) {
 					break;
 				}
 			
 				if (t_a.end > t_b.start) {
+					assert(this->is_active[c_a] && this->is_active[c_b]);
+					assert(this->state[c_a].level.start < IDX_MAX && this->state[c_b].level.start < IDX_MAX);
+
 					min_time = t_b.start;
 					min_conf = {c_a, c_b};
 				}

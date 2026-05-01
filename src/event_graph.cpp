@@ -251,7 +251,6 @@ Event_graph::Sync_state Event_graph::sync(Flag& time_change)
 		};
 	}
 
-
 	return (time_changed ? TIME_UPDATE : NO_CHANGES);
 }
 

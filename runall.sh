@@ -1,6 +1,6 @@
-app="build/exe/instance_test"
+app="build/conflict_solve"
 
-for file in data/*.json
+for file in data/*/*.json
 do
     #echo $file
     $app "$file"

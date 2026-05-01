@@ -9,7 +9,7 @@
 
 #include "preprocess.hpp"
 
-#define CONF_HASH(a, b) (a < b) ? (((lnk_t)a << 16) | (lnk_t)b) : (((lnk_t)b << 16) | (lnk_t)a)
+// #define CONF_HASH(a, b) (a < b) ? (((lnk_t)a << 16) | b) : (((lnk_t)b << 16) | a)
 
 
 class Link_graph
@@ -83,9 +83,22 @@ private:
 	void verify_links();
 
 	void chain_search(lnk_t k, bool need_opp=false);
+	inline lnk_t get_key(idx_pr chunk);
 };
 
 // size_t link_chunk_size = sizeof(Link_graph::Chunk);
+
+Link_graph::lnk_t Link_graph::get_key(idx_pr chunk)
+{
+	if (chunk.first > chunk.second) {
+		std::swap(chunk.first, chunk.second);
+	}
+
+	lnk_t key = chunk.first;
+	key <<= 16;
+	key |= chunk.second;
+	return key;
+}
 
 
 struct Link_graph::Chunk

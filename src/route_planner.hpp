@@ -51,6 +51,8 @@ public:
 	void estimate_level_times();
 	void make_train_conflicts();
 
+	void verify_ops();
+
 	size_t get_cost_sum();
 
 private:
@@ -67,8 +69,8 @@ private:
 	std::vector<tim_t> level_time = {};
 
 	std::vector<GRBConstr> flow_constr = {};
-	std::vector<GRBConstr> obj_constr = {};
-
+	std::vector<GRBConstr> inva_constr = {};
+	
 	void get_random_routes();
 
 	template<typename C>
@@ -86,6 +88,7 @@ private:
 	void find_req_routes();
 	void add_route_vars();
 	void add_flow_constr();
+	void add_inva_constr();
 
 	bool optimize_model();
 

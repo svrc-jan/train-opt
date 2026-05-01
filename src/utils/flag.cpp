@@ -68,6 +68,7 @@ void Flag::set(const Flag& other)
 	size_t size = other.req_size();
 
 	this->alloc_data(size);
+	this->n_items = other.n_items;
 
 	for (size_t i = 0; i < size; i++) {
 		this->data[i] = other.data[i];

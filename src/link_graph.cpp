@@ -257,7 +257,7 @@ void Link_graph::make_confs()
 			.links = {nullptr, nullptr}
 		};
 
-		this->conf_map[CONF_HASH(conf.chunk.first, conf.chunk.second)] = conf.idx;
+		this->conf_map[this->get_key(conf.chunk)] = conf.idx;
 
 		this->confs.push_back(conf);
 	}
@@ -265,6 +265,11 @@ void Link_graph::make_confs()
 	assert(this->confs.size() == this->conf_map.size());
 
 	this->conf_chain_len.resize(this->confs.size());
+
+	for (auto& conf : this->confs) {
+		assert(this->conf_map[this->get_key(conf.chunk)] == conf.idx);
+		assert(this->conf_map[this->get_key({conf.chunk.second, conf.chunk.first})] == conf.idx);
+	}
 }
 
 
@@ -366,7 +371,7 @@ void Link_graph::add_conf_links_dir(Conflict& conf, const std::pair<int8_t, int8
 			if (r_a == r_b) {
 				conf.links.increment_size(1);
 				this->conf_links.push_back({
-					.idx = this->conf_map[CONF_HASH(c_a, c_b)],
+					.idx = this->conf_map[this->get_key({c_a, c_b})],
 					.link = {l_a, l_b},
 					.opp = (fwd.first != fwd.second)
 				});
@@ -399,9 +404,20 @@ void Link_graph::make_chunk_confs()
 
 void Link_graph::get_chain_len(const vector<idx_pr>& confs, vector<idx_t>& len)
 {
+	len.clear();
 	this->conf_to_do.clear();
 	for (auto x : confs) {
-		this->conf_to_do.push_back(this->conf_map[CONF_HASH(x.first, x.second)]);
+
+		auto it = this->conf_map.find(this->get_key(x));
+		if (it == this->conf_map.end()) {
+			len.push_back(1);
+			continue;
+		}
+
+		auto& conf = this->confs[it->second];
+		assert(conf.chunk == x || (conf.chunk.first == x.second && conf.chunk.second == x.first));
+
+		this->conf_to_do.push_back(it->second);
 	}
 
 	this->conf_done.clear();
@@ -414,7 +430,7 @@ void Link_graph::get_chain_len(const vector<idx_pr>& confs, vector<idx_t>& len)
 		}
 	}
 
-	len.clear();
+	
 	for (auto k : this->conf_to_do) {
 		len.push_back(this->conf_chain_len[k]);
 	}
@@ -425,10 +441,20 @@ void Link_graph::get_chain_conf(idx_pr start, vector<idx_pr>& confs)
 {
 	this->conf_done.clear();
 	this->chain.clear();
-
-	this->chain_search(this->conf_map[CONF_HASH(start.first, start.second)], false);
-
 	confs.clear();
+
+	auto it = this->conf_map.find(this->get_key(start));
+	if (it == this->conf_map.end()) {
+		confs.push_back(start);
+		return;
+	}
+	
+	auto& conf = this->confs[it->second];
+	assert(conf.chunk == start || (conf.chunk.first == start.second && conf.chunk.second == start.first));
+
+	this->chain_search(it->second, false);
+
+	
 	for (auto& x : this->chain) {
 		confs.push_back(this->confs[x].chunk);
 	}
